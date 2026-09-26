@@ -34,7 +34,7 @@ npm run dev
 | `PATCH` | `/api/games/:id` | Обновить переданные поля игры |
 | `DELETE` | `/api/games/:id` | Удалить игру |
 
-Игры содержат `title`, `studio`, `genre`, `rating`, `status`, `palette` и `art`; сервер создаёт строковый UUID, если при создании не задан `id`. Путь к файлу можно переопределить через `GAMES_DATA_FILE`.
+Запись игры имеет поля `id`, `title`, `description`, `version` (строка), `source` (`service`: `steam`/`rawg`/`f95`, `id`: ID записи в соответствующем файле источника), `status` (`Completed`/`Uncompleted`/`Played`/`WantPlay`), `folder` (строка) и `online` (boolean). Сервер создаёт строковый UUID, если при создании не задан `id`. Путь к файлу можно переопределить через `GAMES_DATA_FILE`.
 
 Для сборки выполните `npm run build`; production-сервер запускается командой `npm start`.
 

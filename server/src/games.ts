@@ -3,8 +3,20 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { JsonDatabase } from './lib/jsondb.js';
 
+export const gameStatusSchema = z.enum(['Completed', 'Uncompleted', 'Played', 'WantPlay']);
+export const gameSourceSchema = z.object({
+  service: z.enum(['steam', 'rawg', 'f95']),
+  id: z.number().int().positive(),
+});
+
 const gameFieldsSchema = z.object({
   title: z.string().trim().min(1).max(200),
+  description: z.string().max(5000),
+  version: z.string().max(100),
+  source: gameSourceSchema,
+  status: gameStatusSchema,
+  folder: z.string().max(500),
+  online: z.boolean(),
 });
 
 export const gameSchema = gameFieldsSchema.extend({
@@ -36,7 +48,9 @@ export async function listGames(query: GamesListQuery) {
   const database = await getGamesDatabase();
   const search = query.search?.toLocaleLowerCase();
   const filtered = database.all().filter((game) => !search ||
-    `${game.title} ${game.studio} ${game.genre}`.toLocaleLowerCase().includes(search));
+    `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source.service} ${game.source.id} ${game.status}`
+      .toLocaleLowerCase()
+      .includes(search));
 
   return {
     data: filtered.slice(query.offset, query.offset + query.limit),
