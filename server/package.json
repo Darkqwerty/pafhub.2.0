@@ -1,0 +1,28 @@
+{
+  "name": "@pafhub/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "import:rawg": "tsx src/importers/rawg.ts",
+    "import:f95": "tsx src/importers/f95.ts",
+    "import:steam": "tsx src/importers/steam.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@millenniumearl/f95api": "2.0.0-beta.13.2",
+    "@millenniumearl/recaptcha-harvester": "1.2.1",
+    "dotenv": "^16.6.1",
+    "rawger": "^1.0.0",
+    "steamgames": "^1.0.0",
+    "superjson": "^2.2.2",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.6",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

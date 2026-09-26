@@ -1,0 +1,60 @@
+# PAFHub
+
+Стартовый монорепозиторий каталога игр. Клиент собран на React, TypeScript, Mantine и webpack; сервер — на Node.js и TypeScript.
+
+## Структура
+
+```text
+client/   React SPA и webpack
+server/   HTTP API, схема окружения и интеграционные адаптеры
+```
+
+## Запуск
+
+Требуется Node.js 20 или новее.
+
+```bash
+npm install
+Copy-Item server/.env.example server/.env
+npm run dev
+```
+
+Клиент работает на `http://localhost:8080`, API — на `http://localhost:3001`. Проверка состояния API: `GET /api/health`.
+
+Для сборки выполните `npm run build`; production-сервер запускается командой `npm start`.
+
+## Импорт Steam
+
+Импортер принимает один или несколько Steam App ID, получает данные из Steam Store API по HTTPS и вставляет или обновляет записи в корневом `steam.json`:
+
+```bash
+npm --workspace server run import:steam -- 292030
+```
+
+Можно задать другой путь через переменную `STEAM_DATA_FILE`. Каждая запись содержит `id`, `link`, полный объект ответа Steam в `raw` и время импорта `importedAt` в ISO 8601.
+
+Хранилище JSON реализовано в `server/src/lib/jsondb.ts`: импортёры держат записи в индексированной по `id` Map, читают файл один раз на пакетный запуск и атомарно сохраняют изменения одним проходом.
+
+## Импорт RAWG и F95
+
+RAWG принимает числовой game ID и требует `RAWG_API_KEY` в `server/.env`:
+
+```bash
+npm --workspace server run import:rawg -- 3498
+```
+
+Результат добавляется или обновляется в корневом `rawg.json`. При необходимости путь можно переопределить через `RAWG_DATA_FILE`.
+
+F95 принимает числовой ID треда. Импортер входит в F95 через заданные в `server/.env` `F95_USERNAME` и `F95_PASSWORD`, получает игру по ссылке треда и добавляет или обновляет корневой `f95.json`:
+
+```bash
+npm --workspace server run import:f95 -- 123456
+```
+
+Для входа с двухфакторной проверкой можно задать `F95_2FA_CODE`. Если F95 запросит reCAPTCHA, укажите полученный вручную токен в `F95_RECAPTCHA_TOKEN`; импортер не решает challenge автоматически. Путь к файлу можно переопределить через `F95_DATA_FILE`.
+
+## Источники данных
+
+Переменные окружения для Steam, RAWG и F95 описаны в `server/.env.example`. Ключи хранятся только на сервере. Внешние клиенты из списка зависимостей изолируются в `server/src/providers`; демо-каталог не требует ключей и доступен сразу.
+
+`@millenniumearl/f95api` и `@millenniumearl/recaptcha-harvester` — сторонние библиотеки с последними релизами несколько лет назад. До подключения к живому аккаунту стоит отдельно проверить совместимость с текущим сайтом и правила доступа источника.
