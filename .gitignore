@@ -134,10 +134,10 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-server/src/lib/jsondb.ts
 server/tsconfig.json
 client/tsconfig.json
 f95.json
 package-lock.json
 rawg.json
 steam.json
+games.json

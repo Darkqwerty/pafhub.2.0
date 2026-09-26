@@ -21,6 +21,21 @@ npm run dev
 
 Клиент работает на `http://localhost:8080`, API — на `http://localhost:3001`. Проверка состояния API: `GET /api/health`.
 
+## Игры и API
+
+Каталог хранится в корневом `games.json`. Запросы отправляются обычным JSON; ответы сохраняют используемый сервером формат SuperJSON:
+
+| Метод | Маршрут | Действие |
+| --- | --- | --- |
+| `GET` | `/api/games?search=&limit=50&offset=0` | Список игр и общее количество |
+| `GET` | `/api/games/:id` | Получить игру |
+| `POST` | `/api/games` | Создать игру (ID можно не передавать) |
+| `PUT` | `/api/games/:id` | Полностью заменить поля игры |
+| `PATCH` | `/api/games/:id` | Обновить переданные поля игры |
+| `DELETE` | `/api/games/:id` | Удалить игру |
+
+Игры содержат `title`, `studio`, `genre`, `rating`, `status`, `palette` и `art`; сервер создаёт строковый UUID, если при создании не задан `id`. Путь к файлу можно переопределить через `GAMES_DATA_FILE`.
+
 Для сборки выполните `npm run build`; production-сервер запускается командой `npm start`.
 
 ## Импорт Steam
