@@ -18,7 +18,7 @@ export function FeaturedGames({ games }: { games: Game[] }) {
               <span className="card-tag">{game.status}</span>
             </div>
             <div className="card-info"><div><h3>{game.title}</h3><p>{game.description || 'No description'}</p></div><span className={`online-state ${game.online ? 'is-online' : ''}`}>{game.online ? 'Online' : 'Offline'}</span></div>
-            <div className="card-genre">{game.source.service.toUpperCase()} · v{game.version || '—'}</div>
+            <div className="card-genre">{game.source?.service.toUpperCase() ?? 'LOCAL'} · v{game.version || '—'}</div>
           </article>
         ))}
       </div>

@@ -9,7 +9,7 @@ export type Game = {
   source: {
     service: GameService;
     id: number;
-  };
+  } | null;
   status: GameStatus;
   folder: string;
   online: boolean;

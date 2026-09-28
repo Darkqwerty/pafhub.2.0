@@ -6,6 +6,8 @@ import {
   createGame,
   createGameSchema,
   deleteGame,
+  GameSourceError,
+  gameFieldsSchema,
   getGame,
   gamesListQuerySchema,
   listGames,
@@ -133,7 +135,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
     if (request.method === 'PUT') {
       const body = await readJsonBody(request);
-      const parsed = createGameSchema.omit({ id: true }).safeParse(body);
+      const parsed = gameFieldsSchema.safeParse(body);
       if (!parsed.success) {
         sendJson(response, 400, { error: 'Invalid game', details: parsed.error.flatten() });
         return;
@@ -149,7 +151,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
     if (request.method === 'PATCH') {
       const body = await readJsonBody(request);
-      const parsed = createGameSchema.omit({ id: true }).partial().safeParse(body);
+      const parsed = gameFieldsSchema.partial().safeParse(body);
       if (!parsed.success || !Object.keys(parsed.success ? parsed.data : {}).length) {
         sendJson(response, 400, {
           error: 'Invalid game update',
@@ -190,6 +192,10 @@ const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
     if (error instanceof RequestBodyError) {
       sendJson(response, error.status, { error: error.message });
+      return;
+    }
+    if (error instanceof GameSourceError) {
+      sendJson(response, 502, { error: error.message });
       return;
     }
     console.error(error);

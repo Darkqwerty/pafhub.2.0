@@ -32,7 +32,7 @@ function App() {
 
   const filteredGames = useMemo(
     () => games.filter((game) =>
-      `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source.service} ${game.source.id} ${game.status}`
+      `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source?.service ?? 'local'} ${game.source?.id ?? ''} ${game.status}`
         .toLowerCase()
         .includes(query.toLowerCase())),
     [query],
@@ -40,6 +40,10 @@ function App() {
 
   const handleGameUpdated = (updated: Game) => {
     setGames((current) => current.map((game) => game.id === updated.id ? updated : game));
+  };
+
+  const handleGameCreated = (created: Game) => {
+    setGames((current) => [created, ...current]);
   };
 
   return (
@@ -55,6 +59,7 @@ function App() {
             loading={loadingGames}
             error={gamesError}
             onGameUpdated={handleGameUpdated}
+            onGameCreated={handleGameCreated}
           />
         </Suspense>
         <PageFooter />

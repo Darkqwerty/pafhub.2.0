@@ -5,6 +5,9 @@ type GamesListResponse = {
   total: number;
 };
 
+export type CreateGameInput = Pick<Game, 'source' | 'status' | 'folder' | 'online'> &
+  Partial<Pick<Game, 'title' | 'description' | 'version'>>;
+
 function unwrapSuperJson<T>(payload: unknown): T {
   if (payload && typeof payload === 'object' && 'json' in payload) {
     return (payload as { json: T }).json;
@@ -23,9 +26,16 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const payload = unwrapSuperJson<unknown>(serialized);
 
   if (!response.ok) {
-    const message = payload && typeof payload === 'object' && 'error' in payload
-      ? String((payload as { error: unknown }).error)
-      : `Request failed (${response.status})`;
+    let message = `Request failed (${response.status})`;
+    if (payload && typeof payload === 'object' && 'error' in payload) {
+      message = String((payload as { error: unknown }).error);
+      const details = (payload as { details?: unknown }).details;
+      if (details && typeof details === 'object' && 'fieldErrors' in details) {
+        const fieldErrors = (details as { fieldErrors: Record<string, string[]> }).fieldErrors;
+        const messages = Object.entries(fieldErrors).flatMap(([field, errors]) => errors.map((entry) => `${field}: ${entry}`));
+        if (messages.length) message += ` — ${messages.join('; ')}`;
+      }
+    }
     throw new Error(message);
   }
 
@@ -41,6 +51,14 @@ export async function updateGame(id: string, changes: Partial<Omit<Game, 'id'>>)
   const result = await request<{ data: Game }>(`/api/games/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(changes),
+  });
+  return result.data;
+}
+
+export async function createGame(game: CreateGameInput): Promise<Game> {
+  const result = await request<{ data: Game }>('/api/games', {
+    method: 'POST',
+    body: JSON.stringify(game),
   });
   return result.data;
 }
