@@ -1,0 +1,50 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    restart: unless-stopped
+    env_file:
+      - ./config/.env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      CONTENT_DIR: /app/content
+      GAMES_DATA_FILE: /app/db/games.json
+      STEAM_DATA_FILE: /app/db/steam.json
+      RAWG_DATA_FILE: /app/db/rawg.json
+      F95_DATA_FILE: /app/db/f95.json
+    volumes:
+      - ./config/.env:/app/.env:ro
+      - /volume1/docker/pafhub/content:/app/content
+      - /volume1/docker/pafhub/server:/opt/pafhub/source/server:ro
+      - /volume1/docker/pafhub/db:/app/db
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    volumes:
+      - /volume1/docker/pafhub/client:/opt/pafhub/source/client:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

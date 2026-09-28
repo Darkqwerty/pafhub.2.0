@@ -74,7 +74,8 @@ export class GameSourceError extends Error {
 
 const defaultDataFile = fileURLToPath(new URL('../../games.json', import.meta.url));
 const dataFile = process.env.GAMES_DATA_FILE ?? defaultDataFile;
-const contentDirectory = fileURLToPath(new URL('../../content/', import.meta.url));
+const contentDirectory =
+    process.env.CONTENT_DIR ?? fileURLToPath(new URL('../../content/', import.meta.url));
 const gamesFileSchema = z.array(gameSchema);
 
 export function getGamesDatabase(): Promise<JsonDatabase<GameRecord>> {
