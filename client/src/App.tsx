@@ -1,19 +1,25 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { FeaturedGames } from './components/FeaturedGames';
-import { HeroIntro } from './components/HeroIntro';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { PageFooter } from './components/PageFooter';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
-import { getGames } from './data/gamesApi';
-import type { Game } from './types/game';
+import { getGames, updateLibrary } from './data/gamesApi';
+import type { Game, GameService } from './types/game';
 
 const PopularGames = lazy(() => import('./components/PopularGames'));
 
+export type LibraryUpdateMessage = {
+  kind: 'success' | 'error';
+  text: string;
+};
+
 function App() {
   const [query, setQuery] = useState('');
+  const [library, setLibrary] = useState<GameService>('steam');
   const [games, setGames] = useState<Game[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const [gamesError, setGamesError] = useState<string | null>(null);
+  const [updatingLibrary, setUpdatingLibrary] = useState(false);
+  const [libraryUpdateMessage, setLibraryUpdateMessage] = useState<LibraryUpdateMessage | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -32,11 +38,43 @@ function App() {
 
   const filteredGames = useMemo(
     () => games.filter((game) =>
+      game.source?.service === library &&
       `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source?.service ?? 'local'} ${game.source?.id ?? ''} ${game.status}`
         .toLowerCase()
         .includes(query.toLowerCase())),
-    [query],
+    [query, games, library],
   );
+
+  const handleUpdateLibrary = useCallback(async () => {
+    setUpdatingLibrary(true);
+    setLibraryUpdateMessage(null);
+    try {
+      const result = await updateLibrary(library);
+      const records = await getGames();
+      setGames(records);
+      setLibraryUpdateMessage(
+        result.errors.length
+          ? {
+              kind: 'error',
+              text: `Updated ${result.updated} of ${result.total} games (${result.errors.length} failed).`,
+            }
+          : {
+              kind: 'success',
+              text:
+                result.total === 0
+                  ? 'No games to update in this library.'
+                  : `Library updated: ${result.updated} ${result.updated === 1 ? 'game' : 'games'} refreshed.`,
+            },
+      );
+    } catch (error) {
+      setLibraryUpdateMessage({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Could not update library',
+      });
+    } finally {
+      setUpdatingLibrary(false);
+    }
+  }, [library]);
 
   const handleGameUpdated = (updated: Game) => {
     setGames((current) => current.map((game) => game.id === updated.id ? updated : game));
@@ -46,13 +84,15 @@ function App() {
     setGames((current) => [created, ...current]);
   };
 
+  const handleGameDeleted = (id: string) => {
+    setGames((current) => current.filter((game) => game.id !== id));
+  };
+
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar library={library} onLibraryChange={setLibrary} />
       <main className="main-content" id="top">
         <Topbar query={query} onQueryChange={setQuery} />
-        <HeroIntro />
-        <FeaturedGames games={filteredGames} />
         <Suspense fallback={<section className="catalog-section" aria-busy="true">Loading catalog…</section>}>
           <PopularGames
             games={filteredGames}
@@ -60,6 +100,11 @@ function App() {
             error={gamesError}
             onGameUpdated={handleGameUpdated}
             onGameCreated={handleGameCreated}
+            onGameDeleted={handleGameDeleted}
+            library={library}
+            updatingLibrary={updatingLibrary}
+            onUpdateLibrary={handleUpdateLibrary}
+            libraryUpdateMessage={libraryUpdateMessage}
           />
         </Suspense>
         <PageFooter />

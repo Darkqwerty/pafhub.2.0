@@ -6,12 +6,13 @@ import {
     Modal,
     Select,
     TextInput,
-    Textarea
+    Textarea,
+    Tooltip
 } from '@mantine/core';
 import { MantineReactTable, type MRT_ColumnDef } from 'mantine-react-table';
 import { useMemo, useState, type FormEvent } from 'react';
-import { IconPencil, IconPlus, IconTrendingUp } from '@tabler/icons-react';
-import { createGame, updateGame } from '../data/gamesApi';
+import { IconPencil, IconPlus, IconRefresh, IconTrash, IconTrendingUp } from '@tabler/icons-react';
+import { createGame, deleteGame, updateGame } from '../data/gamesApi';
 import type { CreateGameInput } from '../data/gamesApi';
 import type { Game, GameService, GameStatus } from '../types/game';
 
@@ -21,6 +22,11 @@ type PopularGamesProps = {
     error: string | null;
     onGameUpdated: (game: Game) => void;
     onGameCreated: (game: Game) => void;
+    onGameDeleted: (id: string) => void;
+    library: GameService;
+    updatingLibrary: boolean;
+    onUpdateLibrary: () => void;
+    libraryUpdateMessage: { kind: 'success' | 'error'; text: string } | null;
 };
 
 const statusOptions = ['Completed', 'Uncompleted', 'Played', 'WantPlay'];
@@ -36,25 +42,42 @@ export default function PopularGames({
     loading,
     error,
     onGameUpdated,
-    onGameCreated
+    onGameCreated,
+    onGameDeleted,
+    library,
+    updatingLibrary,
+    onUpdateLibrary,
+    libraryUpdateMessage
 }: PopularGamesProps) {
     const [editingGame, setEditingGame] = useState<Game | null>(null);
     const [draft, setDraft] = useState<Game | null>(null);
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [deletingGame, setDeletingGame] = useState<Game | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const columns = useMemo<MRT_ColumnDef<Game>[]>(
         () => [
             { accessorKey: 'title', header: 'GAME' },
-            { accessorKey: 'description', header: 'DESCRIPTION' },
-            { accessorKey: 'version', header: 'VERSION' },
             {
-                accessorFn: (game) => game.source?.service ?? 'Local',
-                id: 'sourceService',
-                header: 'SOURCE'
+                accessorKey: 'description',
+                header: 'DESCRIPTION',
+                Cell: ({ cell }) => {
+                    const description = cell.getValue<string>();
+                    return (
+                        <Tooltip
+                            label={description || 'No description'}
+                            multiline
+                            maw={420}
+                            disabled={!description}
+                        >
+                            <div className="description-cell">{description || '—'}</div>
+                        </Tooltip>
+                    );
+                }
             },
-            { accessorFn: (game) => game.source?.id ?? '—', id: 'sourceId', header: 'SOURCE ID' },
             {
                 accessorKey: 'status',
                 header: 'STATUS',
@@ -64,34 +87,42 @@ export default function PopularGames({
                     </Badge>
                 )
             },
-            { accessorKey: 'folder', header: 'FOLDER' },
-            {
-                accessorKey: 'online',
-                header: 'ONLINE',
-                Cell: ({ cell }) => (cell.getValue<boolean>() ? 'Yes' : 'No')
-            },
             {
                 id: 'actions',
                 header: '',
-                size: 56,
+                size: 104,
                 enableSorting: false,
                 Cell: ({ row }) => (
-                    <ActionIcon
-                        aria-label={`Edit ${row.original.title}`}
-                        title="Edit game"
-                        variant="subtle"
-                        color="gray"
-                        onClick={() => {
-                            setEditingGame(row.original);
-                            setDraft({
-                                ...row.original,
-                                source: row.original.source ? { ...row.original.source } : null
-                            });
-                            setSaveError(null);
-                        }}
-                    >
-                        <IconPencil size={16} />
-                    </ActionIcon>
+                    <div className="row-actions">
+                        <ActionIcon
+                            aria-label={`Edit ${row.original.title}`}
+                            title="Edit game"
+                            variant="subtle"
+                            color="gray"
+                            onClick={() => {
+                                setEditingGame(row.original);
+                                setDraft({
+                                    ...row.original,
+                                    source: row.original.source ? { ...row.original.source } : null
+                                });
+                                setSaveError(null);
+                            }}
+                        >
+                            <IconPencil size={16} />
+                        </ActionIcon>
+                        <ActionIcon
+                            aria-label={`Delete ${row.original.title}`}
+                            title="Delete game"
+                            variant="subtle"
+                            color="red"
+                            onClick={() => {
+                                setDeletingGame(row.original);
+                                setDeleteError(null);
+                            }}
+                        >
+                            <IconTrash size={16} />
+                        </ActionIcon>
+                    </div>
                 )
             }
         ],
@@ -157,6 +188,21 @@ export default function PopularGames({
         }
     };
 
+    const confirmDelete = async () => {
+        if (!deletingGame) return;
+        setDeleting(true);
+        setDeleteError(null);
+        try {
+            await deleteGame(deletingGame.id);
+            onGameDeleted(deletingGame.id);
+            setDeletingGame(null);
+        } catch (failure) {
+            setDeleteError(failure instanceof Error ? failure.message : 'Could not delete game');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     return (
         <section className="catalog-section">
             <div className="section-heading catalog-heading">
@@ -170,11 +216,29 @@ export default function PopularGames({
                     <span className="games-count">
                         {games.length} {games.length === 1 ? 'game' : 'games'}
                     </span>
+                    <Button
+                        size="xs"
+                        variant="default"
+                        leftSection={<IconRefresh size={14} />}
+                        loading={updatingLibrary}
+                        onClick={onUpdateLibrary}
+                        title={`Update ${library} library`}
+                    >
+                        Update library
+                    </Button>
                     <Button size="xs" leftSection={<IconPlus size={14} />} onClick={openCreateForm}>
                         Add game
                     </Button>
                 </div>
             </div>
+            {libraryUpdateMessage ? (
+                <p
+                    className={`games-message ${libraryUpdateMessage.kind === 'error' ? 'games-error' : ''}`}
+                    role={libraryUpdateMessage.kind === 'error' ? 'alert' : 'status'}
+                >
+                    {libraryUpdateMessage.text}
+                </p>
+            ) : null}
             {error ? (
                 <p className="games-message games-error" role="alert">
                     Could not load games: {error}
@@ -353,6 +417,42 @@ export default function PopularGames({
                             </Button>
                         </div>
                     </form>
+                ) : null}
+            </Modal>
+
+            <Modal
+                opened={deletingGame !== null}
+                onClose={() => {
+                    if (!deleting) setDeletingGame(null);
+                }}
+                title="Delete game"
+                centered
+            >
+                {deletingGame ? (
+                    <div className="game-editor">
+                        <p className="games-message">
+                            Delete <strong>{deletingGame.title}</strong> from your library? This
+                            action cannot be undone.
+                        </p>
+                        {deleteError ? (
+                            <p className="games-error" role="alert">
+                                {deleteError}
+                            </p>
+                        ) : null}
+                        <div className="game-editor-actions">
+                            <Button
+                                variant="subtle"
+                                color="gray"
+                                onClick={() => setDeletingGame(null)}
+                                disabled={deleting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button color="red" loading={deleting} onClick={confirmDelete}>
+                                Delete
+                            </Button>
+                        </div>
+                    </div>
                 ) : null}
             </Modal>
         </section>

@@ -13,6 +13,7 @@ import {
   listGames,
   patchGame,
   replaceGame,
+  updateLibrary,
 } from './games.js';
 
 class RequestBodyError extends Error {
@@ -182,6 +183,17 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     }
 
     sendJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const libraryUpdateMatch = url.pathname.match(/^\/api\/libraries\/([^/]+)\/update$/);
+  if (libraryUpdateMatch && request.method === 'POST') {
+    const service = libraryUpdateMatch[1];
+    if (service !== 'steam' && service !== 'rawg' && service !== 'f95') {
+      sendJson(response, 404, { error: 'Unknown library' });
+      return;
+    }
+    sendJson(response, 200, { data: await updateLibrary(service as 'steam' | 'rawg' | 'f95') });
     return;
   }
 

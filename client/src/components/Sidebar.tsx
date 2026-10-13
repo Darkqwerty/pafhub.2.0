@@ -1,13 +1,17 @@
 import {
+    IconBrandSteam,
     IconChevronRight,
     IconCirclePlus,
     IconCompass,
     IconDeviceGamepad2,
+    IconFlame,
     IconHeart,
     IconLayoutGrid,
     IconSettings,
-    IconSparkles
+    IconSparkles,
+    IconWorld
 } from '@tabler/icons-react';
+import type { GameService } from '../types/game';
 
 const navItems = [
     { label: 'Discover', icon: IconCompass, active: true },
@@ -15,7 +19,18 @@ const navItems = [
     { label: 'Wishlist', icon: IconHeart, count: '8' }
 ];
 
-export function Sidebar() {
+const libraries: Array<{ label: string; service: GameService; icon: typeof IconCompass }> = [
+    { label: 'Steam', service: 'steam', icon: IconBrandSteam },
+    { label: 'RAWG', service: 'rawg', icon: IconWorld },
+    { label: 'F95', service: 'f95', icon: IconFlame }
+];
+
+type SidebarProps = {
+    library: GameService;
+    onLibraryChange: (service: GameService) => void;
+};
+
+export function Sidebar({ library, onLibraryChange }: SidebarProps) {
     return (
         <aside className="sidebar">
             <a className="brand" href="#top">
@@ -33,6 +48,19 @@ export function Sidebar() {
                         <Icon size={19} stroke={1.8} />
                         <span>{label}</span>
                         {count && <span className="nav-count">{count}</span>}
+                    </button>
+                ))}
+            </nav>
+            <div className="nav-label libraries-label">LIBRARIES</div>
+            <nav className="primary-nav library-nav">
+                {libraries.map(({ label, service, icon: Icon }) => (
+                    <button
+                        className={`nav-item ${library === service ? 'active' : ''}`}
+                        key={service}
+                        onClick={() => onLibraryChange(service)}
+                    >
+                        <Icon size={19} stroke={1.8} />
+                        <span>{label}</span>
                     </button>
                 ))}
             </nav>

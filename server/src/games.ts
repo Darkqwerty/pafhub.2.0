@@ -11,6 +11,8 @@ export const gameSourceSchema = z.object({
     id: z.number().int().positive()
 });
 
+export type GameService = z.infer<typeof gameSourceSchema>['service'];
+
 const folderSchema = z
     .string()
     .trim()
@@ -183,6 +185,43 @@ export async function listGames(query: GamesListQuery) {
         limit: query.limit,
         offset: query.offset
     };
+}
+
+export async function updateLibrary(service: GameService): Promise<{
+    service: GameService;
+    updated: number;
+    total: number;
+    errors: string[];
+}> {
+    const database = await getGamesDatabase();
+    const games = database.all().filter((game) => game.source?.service === service);
+    const errors: string[] = [];
+    let updated = 0;
+
+    for (const game of games) {
+        const source = game.source;
+        if (!source) continue;
+        try {
+            const sourceDetails = mapSourceDetails(source.service, await fetchSourceRecord(source));
+            const next = gameSchema.parse({
+                ...game,
+                title: sourceDetails.title || game.title,
+                description: sourceDetails.description || game.description,
+                version: sourceDetails.version || game.version,
+                online: game.online || sourceDetails.online
+            });
+            database.upsert(next);
+            updated += 1;
+        } catch (error) {
+            errors.push(
+                `${game.title || game.id}: ${error instanceof Error ? error.message : 'Source request failed'}`
+            );
+        }
+    }
+
+    if (updated > 0) await database.save();
+
+    return { service, updated, total: games.length, errors };
 }
 
 export async function getGame(id: string): Promise<GameRecord | undefined> {

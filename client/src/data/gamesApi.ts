@@ -1,4 +1,4 @@
-import type { Game } from '../types/game';
+import type { Game, GameService } from '../types/game';
 
 type GamesListResponse = {
   data: Game[];
@@ -55,10 +55,29 @@ export async function updateGame(id: string, changes: Partial<Omit<Game, 'id'>>)
   return result.data;
 }
 
+export async function deleteGame(id: string): Promise<void> {
+  await request<void>(`/api/games/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export async function createGame(game: CreateGameInput): Promise<Game> {
   const result = await request<{ data: Game }>('/api/games', {
     method: 'POST',
     body: JSON.stringify(game),
   });
+  return result.data;
+}
+
+export type LibraryUpdateResult = {
+  service: GameService;
+  updated: number;
+  total: number;
+  errors: string[];
+};
+
+export async function updateLibrary(service: GameService): Promise<LibraryUpdateResult> {
+  const result = await request<{ data: LibraryUpdateResult }>(
+    `/api/libraries/${service}/update`,
+    { method: 'POST' },
+  );
   return result.data;
 }
