@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { JsonDatabase } from '../lib/jsondb.js';
+import { getSettings } from '../settings.js';
 
 const rawgIdSchema = z.coerce.number().int().positive();
 const rawgGameSchema = z.object({
@@ -18,11 +19,15 @@ const rawgFileSchema = z.array(z.object({
 
 export type RawgRecord = z.infer<typeof rawgFileSchema>[number];
 
-const defaultDataFile = fileURLToPath(new URL('../../../rawg.json', import.meta.url));
+const defaultDataFile = fileURLToPath(new URL('../../../db/rawg.json', import.meta.url));
 
 async function fetchRawgRecord(gameIdInput: string | number): Promise<RawgRecord> {
   const id = rawgIdSchema.parse(gameIdInput);
-  const apiKey = z.string().min(1, 'RAWG_API_KEY is required').parse(process.env.RAWG_API_KEY);
+  const settings = await getSettings();
+  const apiKey = z
+    .string()
+    .min(1, 'RAWG_API_KEY is required')
+    .parse(settings.RAWG_API_KEY || process.env.RAWG_API_KEY);
   const url = new URL(`https://api.rawg.io/api/games/${id}`);
   url.searchParams.set('key', apiKey);
 

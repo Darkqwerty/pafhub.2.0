@@ -136,8 +136,5 @@ dist
 .pnp.*
 server/tsconfig.json
 client/tsconfig.json
-f95.json
+db/*.json
 package-lock.json
-rawg.json
-steam.json
-games.json

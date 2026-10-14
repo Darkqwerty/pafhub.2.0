@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import superjson from 'superjson';
 import { config } from './config.js';
 import { catalogQuerySchema, getCatalog } from './catalog.js';
+import { getSettings, settingsUpdateSchema, updateSettings } from './settings.js';
 import {
   createGame,
   createGameSchema,
@@ -76,6 +77,27 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       return;
     }
     sendJson(response, 200, { data: getCatalog(parsed.data) });
+    return;
+  }
+
+  if (url.pathname === '/api/settings') {
+    if (request.method === 'GET') {
+      sendJson(response, 200, { data: await getSettings() });
+      return;
+    }
+
+    if (request.method === 'PUT') {
+      const body = await readJsonBody(request);
+      const parsed = settingsUpdateSchema.safeParse(body);
+      if (!parsed.success) {
+        sendJson(response, 400, { error: 'Invalid settings', details: parsed.error.flatten() });
+        return;
+      }
+      sendJson(response, 200, { data: await updateSettings(parsed.data) });
+      return;
+    }
+
+    sendJson(response, 405, { error: 'Method not allowed' });
     return;
   }
 

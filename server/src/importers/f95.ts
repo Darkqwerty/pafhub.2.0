@@ -38,7 +38,7 @@ const f95FileSchema = z.array(z.object({
 
 export type F95Record = z.infer<typeof f95FileSchema>[number];
 
-const defaultDataFile = fileURLToPath(new URL('../../../f95.json', import.meta.url));
+const defaultDataFile = fileURLToPath(new URL('../../../db/f95.json', import.meta.url));
 
 async function fetchF95Record(threadIdInput: string | number): Promise<F95Record> {
     const id = f95IdSchema.parse(threadIdInput);

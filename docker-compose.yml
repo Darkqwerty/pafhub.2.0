@@ -15,6 +15,7 @@ services:
       STEAM_DATA_FILE: /app/db/steam.json
       RAWG_DATA_FILE: /app/db/rawg.json
       F95_DATA_FILE: /app/db/f95.json
+      SETTINGS_DATA_FILE: /app/db/settings.json
     volumes:
       - ./config/.env:/app/.env:ro
       - /volume1/docker/pafhub/content:/app/content

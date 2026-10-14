@@ -15,7 +15,7 @@ function unwrapSuperJson<T>(payload: unknown): T {
   return payload as T;
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
   const response = await fetch(url, {

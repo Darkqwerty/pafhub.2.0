@@ -5,4 +5,8 @@ node_modules
 **/dist
 config/.env
 content
-db
+db/*
+!db/games.json
+!db/steam.json
+!db/rawg.json
+!db/f95.json

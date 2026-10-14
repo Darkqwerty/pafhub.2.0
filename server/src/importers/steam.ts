@@ -19,7 +19,7 @@ const upstreamEntrySchema = z.object({
 
 export type SteamRecord = z.infer<typeof steamRecordSchema>;
 
-const defaultDataFile = fileURLToPath(new URL('../../../steam.json', import.meta.url));
+const defaultDataFile = fileURLToPath(new URL('../../../db/steam.json', import.meta.url));
 
 async function fetchSteamRaw(id: number): Promise<unknown> {
   const url = new URL('https://store.steampowered.com/api/appdetails');

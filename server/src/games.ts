@@ -74,7 +74,7 @@ export class GameSourceError extends Error {
     }
 }
 
-const defaultDataFile = fileURLToPath(new URL('../../games.json', import.meta.url));
+const defaultDataFile = fileURLToPath(new URL('../../db/games.json', import.meta.url));
 const dataFile = process.env.GAMES_DATA_FILE ?? defaultDataFile;
 const contentDirectory =
     process.env.CONTENT_DIR ?? fileURLToPath(new URL('../../content/', import.meta.url));

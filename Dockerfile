@@ -23,7 +23,7 @@ COPY package.json ./package.json
 COPY server/package.json ./server/package.json
 COPY --from=build /app/server/dist ./server/dist
 COPY server/vendor ./server/vendor
-COPY games.json steam.json rawg.json f95.json ./seed/
+COPY db/games.json db/steam.json db/rawg.json db/f95.json ./seed/
 COPY deploy/entrypoint.sh /usr/local/bin/pafhub-entrypoint
 RUN chmod 644 /usr/local/bin/pafhub-entrypoint
 EXPOSE 3001
