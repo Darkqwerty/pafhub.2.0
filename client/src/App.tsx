@@ -52,18 +52,19 @@ function App() {
       const result = await updateLibrary(library);
       const records = await getGames();
       setGames(records);
+      const added = result.added;
       setLibraryUpdateMessage(
         result.errors.length
           ? {
               kind: 'error',
-              text: `Updated ${result.updated} of ${result.total} games (${result.errors.length} failed).`,
+              text: `Updated ${result.updated} of ${result.total} games, added ${added} new (${result.errors.length} failed).`,
             }
           : {
               kind: 'success',
               text:
-                result.total === 0
+                result.total === 0 && added === 0
                   ? 'No games to update in this library.'
-                  : `Library updated: ${result.updated} ${result.updated === 1 ? 'game' : 'games'} refreshed.`,
+                  : `Library updated: ${result.updated} refreshed, ${added} added.`,
             },
       );
     } catch (error) {

@@ -253,11 +253,11 @@ export default function PopularGames({
                     data={games}
                     getRowId={(game) => game.id}
                     state={{ isLoading: loading, showProgressBars: loading }}
+                    initialState={{ sorting: [{ id: 'title', desc: false }] }}
                     enableTopToolbar={false}
                     enableBottomToolbar={false}
                     enableColumnActions={false}
                     enableColumnFilters={false}
-                    enableSorting={false}
                     enablePagination={false}
                     enableDensityToggle={false}
                     enableFullScreenToggle={false}

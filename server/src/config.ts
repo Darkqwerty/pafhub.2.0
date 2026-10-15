@@ -7,6 +7,7 @@ const envSchema = z.object({
   CLIENT_ORIGIN: z.string().url().default('http://localhost:8080'),
   RAWG_API_KEY: z.string().optional(),
   STEAM_API_KEY: z.string().optional(),
+  STEAM_ID: z.string().optional(),
   F95_USERNAME: z.string().optional(),
   F95_PASSWORD: z.string().optional(),
 });

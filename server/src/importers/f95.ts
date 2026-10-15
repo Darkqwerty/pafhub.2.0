@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { JsonDatabase } from '../lib/jsondb.js';
+import type { OwnedGame } from './types.js';
 
 const f95IdSchema = z.coerce.number().int().positive();
 
@@ -92,6 +93,15 @@ export async function importF95Game(
     database.upsert(record);
     await database.save();
     return record;
+}
+
+/**
+ * F95Zone has no per-account purchase library, so the library update cannot
+ * discover owned games for this service. Stub kept so every provider exposes
+ * the same owned-games contract as Steam.
+ */
+export async function listF95OwnedGames(): Promise<OwnedGame[]> {
+    return [];
 }
 
 async function runCli(): Promise<void> {

@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { JsonDatabase } from '../lib/jsondb.js';
 import { getSettings } from '../settings.js';
+import type { OwnedGame } from './types.js';
 
 const rawgIdSchema = z.coerce.number().int().positive();
 const rawgGameSchema = z.object({
@@ -61,6 +62,15 @@ export async function importRawgGame(
   database.upsert(record);
   await database.save();
   return record;
+}
+
+/**
+ * RAWG has no per-account purchase list, so the library update cannot discover
+ * owned games for this service. Stub kept so every provider exposes the same
+ * owned-games contract as Steam.
+ */
+export async function listRawgOwnedGames(): Promise<OwnedGame[]> {
+    return [];
 }
 
 async function runCli(): Promise<void> {

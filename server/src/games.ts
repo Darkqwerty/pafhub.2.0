@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { JsonDatabase } from './lib/jsondb.js';
+import type { OwnedGame } from './importers/types.js';
 
 export const gameStatusSchema = z.enum(['Completed', 'Uncompleted', 'Played', 'WantPlay']);
 export const gameSourceSchema = z.object({
@@ -187,17 +188,32 @@ export async function listGames(query: GamesListQuery) {
     };
 }
 
-export async function updateLibrary(service: GameService): Promise<{
+export type LibraryUpdateResult = {
     service: GameService;
     updated: number;
+    added: number;
     total: number;
     errors: string[];
-}> {
+};
+
+async function fetchOwnedGames(service: GameService): Promise<OwnedGame[]> {
+    switch (service) {
+        case 'steam':
+            return (await import('./importers/steam.js')).listSteamOwnedGames();
+        case 'rawg':
+            return (await import('./importers/rawg.js')).listRawgOwnedGames();
+        case 'f95':
+            return (await import('./importers/f95.js')).listF95OwnedGames();
+    }
+}
+
+export async function updateLibrary(service: GameService): Promise<LibraryUpdateResult> {
     const database = await getGamesDatabase();
     const games = database.all().filter((game) => game.source?.service === service);
     const errors: string[] = [];
     let updated = 0;
 
+    // Refresh the metadata of games already present in the catalog.
     for (const game of games) {
         const source = game.source;
         if (!source) continue;
@@ -219,9 +235,43 @@ export async function updateLibrary(service: GameService): Promise<{
         }
     }
 
-    if (updated > 0) await database.save();
+    // Discover the games the user owns on the provider and add the missing ones.
+    let added = 0;
+    const knownSourceIds = new Set(
+        games.map((game) => game.source?.id).filter((id): id is number => id !== undefined)
+    );
+    try {
+        for (const ownedGame of await fetchOwnedGames(service)) {
+            if (knownSourceIds.has(ownedGame.id)) continue;
+            try {
+                const source = { service, id: ownedGame.id };
+                const sourceDetails = mapSourceDetails(service, await fetchSourceRecord(source));
+                const next = gameSchema.parse({
+                    id: randomUUID(),
+                    title: sourceDetails.title || ownedGame.title,
+                    description: sourceDetails.description,
+                    version: sourceDetails.version,
+                    source,
+                    status: 'WantPlay',
+                    folder: '',
+                    online: sourceDetails.online
+                });
+                database.upsert(next);
+                knownSourceIds.add(ownedGame.id);
+                added += 1;
+            } catch (error) {
+                errors.push(
+                    `${ownedGame.title || ownedGame.id}: ${error instanceof Error ? error.message : 'Source request failed'}`
+                );
+            }
+        }
+    } catch (error) {
+        errors.push(error instanceof Error ? error.message : 'Could not load the owned games list');
+    }
 
-    return { service, updated, total: games.length, errors };
+    if (updated > 0 || added > 0) await database.save();
+
+    return { service, updated, added, total: games.length, errors };
 }
 
 export async function getGame(id: string): Promise<GameRecord | undefined> {

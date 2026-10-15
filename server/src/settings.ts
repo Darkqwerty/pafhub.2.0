@@ -6,6 +6,7 @@ import { z } from 'zod';
 export const settingsSchema = z.object({
     RAWG_API_KEY: z.string(),
     STEAM_API_KEY: z.string(),
+    STEAM_ID: z.string().default(''),
     STEAM_LOGIN: z.string(),
     STEAM_PASSWORD: z.string(),
 });
@@ -19,7 +20,7 @@ const defaultDataFile = fileURLToPath(new URL('../../db/settings.json', import.m
 const dataFile = process.env.SETTINGS_DATA_FILE ?? defaultDataFile;
 
 export function emptySettings(): Settings {
-    return { RAWG_API_KEY: '', STEAM_API_KEY: '', STEAM_LOGIN: '', STEAM_PASSWORD: '' };
+    return { RAWG_API_KEY: '', STEAM_API_KEY: '', STEAM_ID: '', STEAM_LOGIN: '', STEAM_PASSWORD: '' };
 }
 
 export async function getSettings(): Promise<Settings> {

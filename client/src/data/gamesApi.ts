@@ -70,6 +70,7 @@ export async function createGame(game: CreateGameInput): Promise<Game> {
 export type LibraryUpdateResult = {
   service: GameService;
   updated: number;
+  added: number;
   total: number;
   errors: string[];
 };

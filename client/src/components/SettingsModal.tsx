@@ -11,6 +11,7 @@ type SettingsModalProps = {
 const emptySettings: Settings = {
   RAWG_API_KEY: '',
   STEAM_API_KEY: '',
+  STEAM_ID: '',
   STEAM_LOGIN: '',
   STEAM_PASSWORD: '',
 };
@@ -75,6 +76,12 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
               label="Steam API key"
               value={draft.STEAM_API_KEY}
               onChange={(event) => setField('STEAM_API_KEY', event.currentTarget.value)}
+            />
+            <TextInput
+              label="Steam ID"
+              description="17-digit SteamID64 used to list your owned games."
+              value={draft.STEAM_ID}
+              onChange={(event) => setField('STEAM_ID', event.currentTarget.value)}
             />
             <TextInput
               label="Steam login"
