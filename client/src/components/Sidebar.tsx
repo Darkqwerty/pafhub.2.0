@@ -1,16 +1,12 @@
 import {
     IconBrandSteam,
-    IconChevronRight,
-    IconCirclePlus,
     IconCompass,
-    IconDeviceGamepad2,
     IconFlame,
     IconHeart,
     IconLayoutGrid,
-    IconSettings,
-    IconSparkles,
     IconWorld
 } from '@tabler/icons-react';
+import { HintButton } from './HintButton';
 import type { GameService } from '../types/game';
 
 const navItems = [
@@ -34,24 +30,22 @@ export function Sidebar({ library, onLibraryChange }: SidebarProps) {
     return (
         <aside className="sidebar">
             <a className="brand" href="#top">
-                <span className="brand-mark">
-                    <IconDeviceGamepad2 size={20} stroke={2.4} />
-                </span>
+                <span className="brand-mark">&gt;_</span>
                 <span>
                     PAF<span className="brand-light">HUB</span>
                 </span>
             </a>
-            <div className="nav-label">MENU</div>
+            <div className="nav-label"># MENU</div>
             <nav className="primary-nav">
                 {navItems.map(({ label, icon: Icon, count, active }) => (
                     <button className={`nav-item ${active ? 'active' : ''}`} key={label}>
-                        <Icon size={19} stroke={1.8} />
+                        <Icon size={17} stroke={1.8} />
                         <span>{label}</span>
                         {count && <span className="nav-count">{count}</span>}
                     </button>
                 ))}
             </nav>
-            <div className="nav-label libraries-label">LIBRARIES</div>
+            <div className="nav-label libraries-label"># LIBRARIES</div>
             <nav className="primary-nav library-nav">
                 {libraries.map(({ label, service, icon: Icon }) => (
                     <button
@@ -59,16 +53,14 @@ export function Sidebar({ library, onLibraryChange }: SidebarProps) {
                         key={service}
                         onClick={() => onLibraryChange(service)}
                     >
-                        <Icon size={19} stroke={1.8} />
+                        <Icon size={17} stroke={1.8} />
                         <span>{label}</span>
                     </button>
                 ))}
             </nav>
             <div className="nav-label collections-label">
-                YOUR COLLECTIONS{' '}
-                <button className="tiny-add" aria-label="Add collection">
-                    <IconCirclePlus size={16} />
-                </button>
+                # COLLECTIONS{' '}
+                <HintButton keyLabel="+" compact title="Add collection">Add</HintButton>
             </div>
             <nav className="primary-nav collection-nav">
                 <button className="nav-item">
@@ -89,26 +81,24 @@ export function Sidebar({ library, onLibraryChange }: SidebarProps) {
             </nav>
             <div className="sidebar-bottom">
                 <div className="sidebar-promo">
-                    <div className="promo-icon">
-                        <IconSparkles size={18} />
-                    </div>
                     <strong>
                         Your next favorite
                         <br />
                         is out there.
                     </strong>
                     <p>Explore handpicked games made for you.</p>
-                    <button>
-                        Get recommendations <IconChevronRight size={14} />
-                    </button>
+                    <HintButton keyLabel="r" compact>get-recommendations</HintButton>
                 </div>
                 <button className="profile">
                     <span className="avatar">T</span>
                     <span className="profile-copy">
-                        <strong>Tony</strong>
-                        <small>Level 12 explorer</small>
+                        <strong>tony</strong>
+                        <small>uid=1000 · pafhub</small>
                     </span>
-                    <IconSettings size={18} className="profile-settings" />
+                    <span className="profile-hint">
+                        <span className="hint-key">s</span>
+                        <span className="hint-label">:setup</span>
+                    </span>
                 </button>
             </div>
         </aside>

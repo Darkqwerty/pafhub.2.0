@@ -1,5 +1,6 @@
-import { Button, Modal, PasswordInput, TextInput } from '@mantine/core';
+import { Modal, PasswordInput, TextInput } from '@mantine/core';
 import { useEffect, useState, type FormEvent } from 'react';
+import { HintButton } from './HintButton';
 import { getSettings, updateSettings } from '../data/settingsApi';
 import type { Settings } from '../types/settings';
 
@@ -101,12 +102,12 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
           </p>
         ) : null}
         <div className="game-editor-actions">
-          <Button variant="subtle" color="gray" onClick={onClose} disabled={saving}>
+          <HintButton keyLabel="Esc" onClick={onClose} disabled={saving}>
             Cancel
-          </Button>
-          <Button type="submit" loading={saving} disabled={loading}>
-            Save
-          </Button>
+          </HintButton>
+          <HintButton keyLabel="s" type="submit" disabled={loading || saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </HintButton>
         </div>
       </form>
     </Modal>
