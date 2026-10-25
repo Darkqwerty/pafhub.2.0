@@ -109,7 +109,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (url.pathname === '/api/epic/auth') {
     if (request.method === 'GET') {
-      sendJson(response, 200, { data: { url: getEpicAuthUrl() } });
+      sendJson(response, 200, { data: { url: await getEpicAuthUrl() } });
       return;
     }
 

@@ -9,6 +9,8 @@ export const settingsSchema = z.object({
     STEAM_ID: z.string().default(''),
     STEAM_LOGIN: z.string(),
     STEAM_PASSWORD: z.string(),
+    EPIC_CLIENT_ID: z.string().default(''),
+    EPIC_CLIENT_SECRET: z.string().default(''),
     EPIC_ACCOUNT_ID: z.string().default(''),
     EPIC_REFRESH_TOKEN: z.string().default(''),
 });
@@ -36,6 +38,8 @@ export function emptySettings(): Settings {
         STEAM_ID: '',
         STEAM_LOGIN: '',
         STEAM_PASSWORD: '',
+        EPIC_CLIENT_ID: '',
+        EPIC_CLIENT_SECRET: '',
         EPIC_ACCOUNT_ID: '',
         EPIC_REFRESH_TOKEN: '',
     };

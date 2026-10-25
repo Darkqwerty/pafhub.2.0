@@ -21,6 +21,8 @@ const emptySettings: Settings = {
   STEAM_ID: '',
   STEAM_LOGIN: '',
   STEAM_PASSWORD: '',
+  EPIC_CLIENT_ID: '',
+  EPIC_CLIENT_SECRET: '',
   EPIC_ACCOUNT_ID: '',
 };
 
@@ -152,6 +154,18 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
             />
 
             <Divider label="Epic Games" labelPosition="left" my="xs" />
+            <TextInput
+              label="Epic client ID"
+              description="OAuth client used for Epic login. Defaults to the Epic Games Launcher client."
+              value={draft.EPIC_CLIENT_ID}
+              onChange={(event) => setField('EPIC_CLIENT_ID', event.currentTarget.value)}
+            />
+            <PasswordInput
+              label="Epic client secret"
+              description="OAuth client secret. Change only when using your own Epic client."
+              value={draft.EPIC_CLIENT_SECRET}
+              onChange={(event) => setField('EPIC_CLIENT_SECRET', event.currentTarget.value)}
+            />
             <TextInput
               label="Epic account ID"
               description="Filled in automatically once you authorize below."

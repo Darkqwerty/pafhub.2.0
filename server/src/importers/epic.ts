@@ -20,10 +20,6 @@ const EPIC_OAUTH_HOST = 'account-public-service-prod03.ol.epicgames.com';
 const EPIC_LAUNCHER_HOST = 'launcher-public-service-prod06.ol.epicgames.com';
 const EPIC_CATALOG_HOST = 'catalog-public-service-prod06.ol.epicgames.com';
 
-// Public credentials shipped with the Epic Games Launcher client.
-const EPIC_CLIENT_ID = '34a02cf8f4414e29b15921876da36f9a';
-const EPIC_CLIENT_SECRET = 'daafbccc737745039dffe53d94fc76cf';
-
 const EPIC_USER_AGENT =
     'UELauncher/11.0.1-14907503+++Portal+Release-Live Windows/10.0.19041.1.256.64bit';
 const EPIC_REQUEST_TIMEOUT_MS = 20_000;
@@ -63,9 +59,24 @@ const defaultDataFile = fileURLToPath(new URL('../../../db/epic.json', import.me
 
 let cachedToken: { accessToken: string; expiresAt: number } | null = null;
 
+/**
+ * Resolves the OAuth client used for Epic authentication. Both values are set
+ * in the Settings dialog and stored in db/settings.json.
+ */
+async function getEpicClientCredentials(): Promise<{ clientId: string; clientSecret: string }> {
+    const settings = await getSettings();
+    const clientId = settings.EPIC_CLIENT_ID.trim();
+    const clientSecret = settings.EPIC_CLIENT_SECRET.trim();
+    if (!clientId || !clientSecret) {
+        throw new Error('Epic client ID and secret are not configured; set them in Settings');
+    }
+    return { clientId, clientSecret };
+}
+
 /** Login URL to open in a browser; its JSON response contains `authorizationCode`. */
-export function getEpicAuthUrl(): string {
-    const redirect = `https://www.epicgames.com/id/api/redirect?clientId=${EPIC_CLIENT_ID}&responseType=code`;
+export async function getEpicAuthUrl(): Promise<string> {
+    const { clientId } = await getEpicClientCredentials();
+    const redirect = `https://www.epicgames.com/id/api/redirect?clientId=${clientId}&responseType=code`;
     return `https://www.epicgames.com/id/login?redirectUrl=${encodeURIComponent(redirect)}`;
 }
 
@@ -85,11 +96,12 @@ function describeEpicError(payload: unknown): string {
 }
 
 async function requestEpicToken(params: Record<string, string>): Promise<EpicToken> {
+    const { clientId, clientSecret } = await getEpicClientCredentials();
     const response = await fetch(`https://${EPIC_OAUTH_HOST}/account/api/oauth/token`, {
         method: 'POST',
         headers: {
             'content-type': 'application/x-www-form-urlencoded',
-            authorization: `Basic ${Buffer.from(`${EPIC_CLIENT_ID}:${EPIC_CLIENT_SECRET}`).toString('base64')}`,
+            authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
             'user-agent': EPIC_USER_AGENT,
         },
         body: new URLSearchParams({ ...params, token_type: 'eg1' }),
