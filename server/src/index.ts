@@ -1,8 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import superjson from 'superjson';
+import { z } from 'zod';
 import { config } from './config.js';
 import { catalogQuerySchema, getCatalog } from './catalog.js';
-import { getSettings, settingsUpdateSchema, updateSettings } from './settings.js';
+import { getSettings, settingsUpdateSchema, toPublicSettings, updateSettings } from './settings.js';
+import {
+  connectEpicAccount,
+  disconnectEpicAccount,
+  getEpicAuthUrl,
+} from './importers/epic.js';
 import {
   createGame,
   createGameSchema,
@@ -82,7 +88,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (url.pathname === '/api/settings') {
     if (request.method === 'GET') {
-      sendJson(response, 200, { data: await getSettings() });
+      sendJson(response, 200, { data: toPublicSettings(await getSettings()) });
       return;
     }
 
@@ -93,11 +99,48 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
         sendJson(response, 400, { error: 'Invalid settings', details: parsed.error.flatten() });
         return;
       }
-      sendJson(response, 200, { data: await updateSettings(parsed.data) });
+      sendJson(response, 200, { data: toPublicSettings(await updateSettings(parsed.data)) });
       return;
     }
 
     sendJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (url.pathname === '/api/epic/auth') {
+    if (request.method === 'GET') {
+      sendJson(response, 200, { data: { url: getEpicAuthUrl() } });
+      return;
+    }
+
+    if (request.method === 'DELETE') {
+      await disconnectEpicAccount();
+      sendJson(response, 200, { data: { connected: false } });
+      return;
+    }
+
+    sendJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (url.pathname === '/api/epic/auth/exchange') {
+    if (request.method !== 'POST') {
+      sendJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+    const body = await readJsonBody(request);
+    const parsed = z.object({ code: z.string().trim().min(1).max(4096) }).safeParse(body);
+    if (!parsed.success) {
+      sendJson(response, 400, { error: 'Invalid authorization code', details: parsed.error.flatten() });
+      return;
+    }
+    try {
+      sendJson(response, 200, { data: await connectEpicAccount(parsed.data.code) });
+    } catch (error) {
+      sendJson(response, 502, {
+        error: error instanceof Error ? error.message : 'Could not connect the Epic account',
+      });
+    }
     return;
   }
 
@@ -211,11 +254,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const libraryUpdateMatch = url.pathname.match(/^\/api\/libraries\/([^/]+)\/update$/);
   if (libraryUpdateMatch && request.method === 'POST') {
     const service = libraryUpdateMatch[1];
-    if (service !== 'steam' && service !== 'rawg' && service !== 'f95') {
+    if (service !== 'steam' && service !== 'rawg' && service !== 'f95' && service !== 'epic') {
       sendJson(response, 404, { error: 'Unknown library' });
       return;
     }
-    sendJson(response, 200, { data: await updateLibrary(service as 'steam' | 'rawg' | 'f95') });
+    sendJson(response, 200, {
+      data: await updateLibrary(service as 'steam' | 'rawg' | 'f95' | 'epic'),
+    });
     return;
   }
 

@@ -18,14 +18,16 @@ RUN npm ci --omit=dev && npm cache clean --force
 FROM node:22-alpine AS api
 ENV NODE_ENV=production
 WORKDIR /app
+RUN apk add --no-cache curl
 COPY --from=production-deps /app/node_modules ./node_modules
 COPY package.json ./package.json
 COPY server/package.json ./server/package.json
 COPY --from=build /app/server/dist ./server/dist
-COPY server/vendor ./server/vendor
 COPY db/games.json db/steam.json db/rawg.json db/f95.json ./seed/
 COPY deploy/entrypoint.sh /usr/local/bin/pafhub-entrypoint
-RUN chmod 644 /usr/local/bin/pafhub-entrypoint
+# Strip CR in case the build context came from a Windows checkout (CRLF breaks /bin/sh).
+RUN sed -i 's/\r$//' /usr/local/bin/pafhub-entrypoint \
+    && chmod 644 /usr/local/bin/pafhub-entrypoint
 EXPOSE 3001
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/pafhub-entrypoint"]
 

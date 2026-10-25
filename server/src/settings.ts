@@ -9,6 +9,8 @@ export const settingsSchema = z.object({
     STEAM_ID: z.string().default(''),
     STEAM_LOGIN: z.string(),
     STEAM_PASSWORD: z.string(),
+    EPIC_ACCOUNT_ID: z.string().default(''),
+    EPIC_REFRESH_TOKEN: z.string().default(''),
 });
 
 export const settingsUpdateSchema = settingsSchema.partial();
@@ -16,11 +18,27 @@ export const settingsUpdateSchema = settingsSchema.partial();
 export type Settings = z.infer<typeof settingsSchema>;
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 
+/** Settings safe to send to the browser; the Epic refresh token stays server-side. */
+export type PublicSettings = Omit<Settings, 'EPIC_REFRESH_TOKEN'>;
+
+export function toPublicSettings(settings: Settings): PublicSettings {
+    const { EPIC_REFRESH_TOKEN: _refreshToken, ...rest } = settings;
+    return rest;
+}
+
 const defaultDataFile = fileURLToPath(new URL('../../db/settings.json', import.meta.url));
 const dataFile = process.env.SETTINGS_DATA_FILE ?? defaultDataFile;
 
 export function emptySettings(): Settings {
-    return { RAWG_API_KEY: '', STEAM_API_KEY: '', STEAM_ID: '', STEAM_LOGIN: '', STEAM_PASSWORD: '' };
+    return {
+        RAWG_API_KEY: '',
+        STEAM_API_KEY: '',
+        STEAM_ID: '',
+        STEAM_LOGIN: '',
+        STEAM_PASSWORD: '',
+        EPIC_ACCOUNT_ID: '',
+        EPIC_REFRESH_TOKEN: '',
+    };
 }
 
 export async function getSettings(): Promise<Settings> {

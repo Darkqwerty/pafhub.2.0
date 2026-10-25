@@ -1,7 +1,13 @@
-import { Modal, PasswordInput, TextInput } from '@mantine/core';
+import { Button, Divider, Group, Modal, PasswordInput, TextInput } from '@mantine/core';
 import { useEffect, useState, type FormEvent } from 'react';
 import { HintButton } from './HintButton';
-import { getSettings, updateSettings } from '../data/settingsApi';
+import {
+  connectEpicAccount,
+  disconnectEpicAccount,
+  getEpicAuthUrl,
+  getSettings,
+  updateSettings,
+} from '../data/settingsApi';
 import type { Settings } from '../types/settings';
 
 type SettingsModalProps = {
@@ -15,6 +21,7 @@ const emptySettings: Settings = {
   STEAM_ID: '',
   STEAM_LOGIN: '',
   STEAM_PASSWORD: '',
+  EPIC_ACCOUNT_ID: '',
 };
 
 export function SettingsModal({ opened, onClose }: SettingsModalProps) {
@@ -22,12 +29,17 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [epicCode, setEpicCode] = useState('');
+  const [epicBusy, setEpicBusy] = useState(false);
+  const [epicMessage, setEpicMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!opened) return;
     let active = true;
     setLoading(true);
     setError(null);
+    setEpicMessage(null);
+    setEpicCode('');
     getSettings()
       .then((settings) => {
         if (active) setDraft(settings);
@@ -45,6 +57,50 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
 
   const setField = (field: keyof Settings, value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
+
+  const startEpicAuth = async () => {
+    setEpicMessage(null);
+    try {
+      const url = await getEpicAuthUrl();
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setEpicMessage(
+        'Sign in on the Epic page, then paste the "authorizationCode" value from the JSON response below.',
+      );
+    } catch (failure) {
+      setEpicMessage(failure instanceof Error ? failure.message : 'Could not start Epic login');
+    }
+  };
+
+  const submitEpicCode = async () => {
+    setEpicBusy(true);
+    setEpicMessage(null);
+    try {
+      const { accountId } = await connectEpicAccount(epicCode);
+      setDraft((current) => ({ ...current, EPIC_ACCOUNT_ID: accountId }));
+      setEpicCode('');
+      setEpicMessage('Epic account connected.');
+    } catch (failure) {
+      setEpicMessage(failure instanceof Error ? failure.message : 'Could not connect Epic account');
+    } finally {
+      setEpicBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setEpicBusy(true);
+    setEpicMessage(null);
+    try {
+      await disconnectEpicAccount();
+      setDraft((current) => ({ ...current, EPIC_ACCOUNT_ID: '' }));
+      setEpicMessage('Epic account disconnected.');
+    } catch (failure) {
+      setEpicMessage(
+        failure instanceof Error ? failure.message : 'Could not disconnect Epic account',
+      );
+    } finally {
+      setEpicBusy(false);
+    }
+  };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -94,6 +150,43 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
               value={draft.STEAM_PASSWORD}
               onChange={(event) => setField('STEAM_PASSWORD', event.currentTarget.value)}
             />
+
+            <Divider label="Epic Games" labelPosition="left" my="xs" />
+            <TextInput
+              label="Epic account ID"
+              description="Filled in automatically once you authorize below."
+              value={draft.EPIC_ACCOUNT_ID}
+              readOnly
+            />
+            <Group gap="xs">
+              <Button type="button" variant="default" onClick={startEpicAuth} disabled={epicBusy}>
+                Open Epic login
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                color="red"
+                onClick={disconnect}
+                disabled={epicBusy || !draft.EPIC_ACCOUNT_ID}
+              >
+                Disconnect
+              </Button>
+            </Group>
+            <TextInput
+              label="Authorization code"
+              description="Paste the authorizationCode returned by the Epic login page."
+              value={epicCode}
+              onChange={(event) => setEpicCode(event.currentTarget.value)}
+            />
+            <Button
+              type="button"
+              variant="light"
+              onClick={submitEpicCode}
+              disabled={epicBusy || !epicCode.trim()}
+            >
+              {epicBusy ? 'Connecting…' : 'Connect Epic account'}
+            </Button>
+            {epicMessage ? <p className="games-message">{epicMessage}</p> : null}
           </>
         )}
         {error ? (

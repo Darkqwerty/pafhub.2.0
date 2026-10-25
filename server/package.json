@@ -9,11 +9,11 @@
     "import:rawg": "tsx src/importers/rawg.ts",
     "import:f95": "tsx src/importers/f95.ts",
     "import:steam": "tsx src/importers/steam.ts",
+    "import:epic": "tsx src/importers/epic.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@millenniumearl/f95api": "2.0.0-beta.13.2",
-    "@millenniumearl/recaptcha-harvester": "1.2.1",
+    "cheerio": "1.2.0",
     "dotenv": "^16.6.1",
     "rawger": "^1.0.0",
     "steamgames": "^1.0.0",

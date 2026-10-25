@@ -8,8 +8,6 @@ const envSchema = z.object({
   RAWG_API_KEY: z.string().optional(),
   STEAM_API_KEY: z.string().optional(),
   STEAM_ID: z.string().optional(),
-  F95_USERNAME: z.string().optional(),
-  F95_PASSWORD: z.string().optional(),
 });
 
 export const config = envSchema.parse(process.env);

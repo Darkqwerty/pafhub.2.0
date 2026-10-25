@@ -1,7 +1,0 @@
-{
-  "name": "f95api-vendor",
-  "version": "1.0.0",
-  "private": true,
-  "type": "commonjs",
-  "main": "index.js"
-}

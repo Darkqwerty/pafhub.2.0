@@ -15,6 +15,26 @@ function unwrapSuperJson<T>(payload: unknown): T {
   return payload as T;
 }
 
+// A failed proxy (API container down) or a misrouted request returns the SPA
+// `index.html` or an nginx/reverse-proxy error page instead of JSON. Parsing it
+// blindly only yields "Unexpected token '<'", so surface what actually came back.
+async function readJsonBody(response: Response, url: string): Promise<unknown> {
+  if (response.status === 204) return undefined;
+  const text = await response.text();
+  if (text.trim() === '') return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    const contentType = response.headers.get('content-type') ?? 'unknown content type';
+    const preview = text.replace(/\s+/g, ' ').trim().slice(0, 80);
+    throw new Error(
+      `Request to ${url} returned ${contentType} (HTTP ${response.status} ${response.statusText}) instead of JSON. ` +
+        'The API is not reachable at this address — check that /api requests are proxied to the server. ' +
+        `Response starts with: ${preview}`,
+    );
+  }
+}
+
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
@@ -22,7 +42,7 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers,
   });
-  const serialized: unknown = response.status === 204 ? undefined : await response.json();
+  const serialized = await readJsonBody(response, url);
   const payload = unwrapSuperJson<unknown>(serialized);
 
   if (!response.ok) {

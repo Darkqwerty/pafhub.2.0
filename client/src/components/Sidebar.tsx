@@ -1,6 +1,7 @@
 import {
     IconBrandSteam,
     IconCompass,
+    IconDeviceGamepad2,
     IconFlame,
     IconHeart,
     IconLayoutGrid,
@@ -17,6 +18,7 @@ const navItems = [
 
 const libraries: Array<{ label: string; service: GameService; icon: typeof IconCompass }> = [
     { label: 'Steam', service: 'steam', icon: IconBrandSteam },
+    { label: 'Epic Games', service: 'epic', icon: IconDeviceGamepad2 },
     { label: 'RAWG', service: 'rawg', icon: IconWorld },
     { label: 'F95', service: 'f95', icon: IconFlame }
 ];

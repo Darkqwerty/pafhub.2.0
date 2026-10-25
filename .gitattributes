@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts and container configs must keep LF endings.
+# CRLF breaks /bin/sh in the image ("set: line 2: illegal option -").
+*.sh text eol=lf
+Dockerfile text eol=lf
+deploy/nginx.conf text eol=lf

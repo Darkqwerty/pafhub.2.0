@@ -3,9 +3,13 @@ set -eu
 
 mkdir -p /app/db
 mkdir -p /app/content
-for name in games steam rawg f95; do
+for name in games steam rawg f95 epic; do
     if [ ! -e "/app/db/${name}.json" ]; then
-        cp "/app/seed/${name}.json" "/app/db/${name}.json"
+        if [ -f "/app/seed/${name}.json" ]; then
+            cp "/app/seed/${name}.json" "/app/db/${name}.json"
+        else
+            printf '[]\n' > "/app/db/${name}.json"
+        fi
     fi
 done
 

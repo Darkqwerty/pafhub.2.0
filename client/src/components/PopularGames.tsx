@@ -32,9 +32,21 @@ const statusOptions = ['Completed', 'Uncompleted', 'Played', 'WantPlay'];
 const serviceOptions = [
     { value: 'local', label: 'Local game' },
     { value: 'steam', label: 'Steam' },
+    { value: 'epic', label: 'Epic Games' },
     { value: 'rawg', label: 'RAWG' },
     { value: 'f95', label: 'F95' }
 ];
+
+const epicSourceIdPattern = /^[^:\s]+:[^:\s]+$/;
+
+/** Epic identifies records as `namespace:catalogItemId`; the other providers use numeric IDs. */
+function isValidSourceId(source: Game['source']): boolean {
+    if (!source) return true;
+    if (source.service === 'epic') {
+        return typeof source.id === 'string' && epicSourceIdPattern.test(source.id.trim());
+    }
+    return typeof source.id === 'number' && Number.isInteger(source.id) && source.id >= 1;
+}
 
 type SortId = 'title' | 'description' | 'status';
 const sortColumns: Array<{ id: SortId; label: string }> = [
@@ -371,7 +383,9 @@ export default function PopularGames({
                                             id:
                                                 previousSource?.service === value
                                                     ? previousSource.id
-                                                    : 0
+                                                    : value === 'epic'
+                                                        ? ''
+                                                        : 0
                                         }
                                     });
                                 }
@@ -389,20 +403,31 @@ export default function PopularGames({
                         {draft.source ? (
                             <TextInput
                                 label="Source record ID"
-                                type="number"
-                                min={1}
-                                step={1}
+                                description={
+                                    draft.source.service === 'epic'
+                                        ? 'Use the "namespace:catalogItemId" pair shown on the Epic record.'
+                                        : undefined
+                                }
+                                placeholder={
+                                    draft.source.service === 'epic'
+                                        ? 'namespace:catalogItemId'
+                                        : undefined
+                                }
+                                type={draft.source.service === 'epic' ? 'text' : 'number'}
+                                min={draft.source.service === 'epic' ? undefined : 1}
+                                step={draft.source.service === 'epic' ? undefined : 1}
                                 value={String(draft.source.id || '')}
                                 onChange={(event) => {
                                     const source = draft.source;
-                                    if (source)
-                                        setDraft({
-                                            ...draft,
-                                            source: {
-                                                ...source,
-                                                id: Number(event.currentTarget.value)
-                                            }
-                                        });
+                                    if (!source) return;
+                                    const raw = event.currentTarget.value;
+                                    setDraft({
+                                        ...draft,
+                                        source: {
+                                            ...source,
+                                            id: source.service === 'epic' ? raw : Number(raw)
+                                        }
+                                    });
                                 }}
                                 required
                                 disabled={!creating}
@@ -447,10 +472,7 @@ export default function PopularGames({
                                 disabled={
                                     saving ||
                                     ((!creating || !draft.source) && !draft.title.trim()) ||
-                                    Boolean(
-                                        draft.source &&
-                                        (!Number.isInteger(draft.source.id) || draft.source.id < 1)
-                                    )
+                                    !isValidSourceId(draft.source)
                                 }
                             >
                                 {saving

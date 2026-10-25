@@ -8,8 +8,9 @@ import type { OwnedGame } from './importers/types.js';
 
 export const gameStatusSchema = z.enum(['Completed', 'Uncompleted', 'Played', 'WantPlay']);
 export const gameSourceSchema = z.object({
-    service: z.enum(['steam', 'rawg', 'f95']),
-    id: z.number().int().positive()
+    service: z.enum(['steam', 'rawg', 'f95', 'epic']),
+    // Numeric providers use their record ID; Epic uses a `namespace:catalogItemId` string.
+    id: z.union([z.number().int().positive(), z.string().trim().min(1).max(200)])
 });
 
 export type GameService = z.infer<typeof gameSourceSchema>['service'];
@@ -120,6 +121,8 @@ async function fetchSourceRecord(source: NonNullable<GameRecord['source']>): Pro
                 return (await (await import('./importers/rawg.js')).importRawgGame(source.id)).raw;
             case 'f95':
                 return (await (await import('./importers/f95.js')).importF95Game(source.id)).raw;
+            case 'epic':
+                return (await (await import('./importers/epic.js')).importEpicGame(source.id)).raw;
         }
     } catch (error) {
         throw new GameSourceError(error instanceof Error ? error.message : 'Source request failed');
@@ -141,6 +144,14 @@ function mapSourceDetails(service: NonNullable<GameRecord['source']>['service'],
         return {
             title: text(root.name).slice(0, 200),
             description: cleanDescription(root.description_raw ?? root.description),
+            version: text(root.version).slice(0, 100),
+            online: false
+        };
+    }
+    if (service === 'epic') {
+        return {
+            title: text(root.title).slice(0, 200),
+            description: cleanDescription(root.description ?? root.shortDescription),
             version: text(root.version).slice(0, 100),
             online: false
         };
@@ -204,6 +215,8 @@ async function fetchOwnedGames(service: GameService): Promise<OwnedGame[]> {
             return (await import('./importers/rawg.js')).listRawgOwnedGames();
         case 'f95':
             return (await import('./importers/f95.js')).listF95OwnedGames();
+        case 'epic':
+            return (await import('./importers/epic.js')).listEpicOwnedGames();
     }
 }
 
@@ -238,7 +251,9 @@ export async function updateLibrary(service: GameService): Promise<LibraryUpdate
     // Discover the games the user owns on the provider and add the missing ones.
     let added = 0;
     const knownSourceIds = new Set(
-        games.map((game) => game.source?.id).filter((id): id is number => id !== undefined)
+        games
+            .map((game) => game.source?.id)
+            .filter((id): id is number | string => id !== undefined)
     );
     try {
         for (const ownedGame of await fetchOwnedGames(service)) {

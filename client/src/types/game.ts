@@ -1,4 +1,4 @@
-export type GameService = 'steam' | 'rawg' | 'f95';
+export type GameService = 'steam' | 'rawg' | 'f95' | 'epic';
 export type GameStatus = 'Completed' | 'Uncompleted' | 'Played' | 'WantPlay';
 
 export type Game = {
@@ -8,7 +8,7 @@ export type Game = {
   version: string;
   source: {
     service: GameService;
-    id: number;
+    id: number | string;
   } | null;
   status: GameStatus;
   folder: string;
