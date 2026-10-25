@@ -62,8 +62,43 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export async function getGames(): Promise<Game[]> {
-  const result = await request<GamesListResponse>('/api/games?limit=200');
+export async function getGames(service?: GameService): Promise<Game[]> {
+  const games: Game[] = [];
+  const limit = 200;
+  const serviceQuery = service ? `&service=${encodeURIComponent(service)}` : '';
+  let offset = 0;
+  for (;;) {
+    const result = await request<GamesListResponse>(
+      `/api/games?limit=${limit}&offset=${offset}${serviceQuery}`,
+    );
+    games.push(...result.data);
+    if (result.data.length < limit) break;
+    offset += limit;
+  }
+  return games;
+}
+
+export type GameFileEntry = {
+  name: string;
+  kind: 'file' | 'directory';
+};
+
+export async function getGameFiles(id: string): Promise<GameFileEntry[]> {
+  const result = await request<{ data: GameFileEntry[] }>(
+    `/api/games/${encodeURIComponent(id)}/files`,
+  );
+  return result.data;
+}
+
+export type GameMedia = {
+  image: string | null;
+  link: string | null;
+};
+
+export async function getGameMedia(id: string): Promise<GameMedia> {
+  const result = await request<{ data: GameMedia }>(
+    `/api/games/${encodeURIComponent(id)}/media`,
+  );
   return result.data;
 }
 

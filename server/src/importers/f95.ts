@@ -139,6 +139,12 @@ async function fetchF95Record(threadIdInput: string | number): Promise<F95Record
         ) ?? [])[1]?.trim() ?? '';
     const versionFromPost = (/^Version:\s*(.+)$/im.exec(post) ?? [])[1]?.trim() ?? '';
 
+    // Public tag list, rendered as `a.tagItem` links on the thread page.
+    const tags = $('a.tagItem')
+        .map((_index, element) => $(element).text().trim())
+        .get()
+        .filter((tag) => tag.length > 0);
+
     const raw = {
         id,
         name: cleanName(headline) || headline || `F95 thread ${id}`,
@@ -147,6 +153,7 @@ async function fetchF95Record(threadIdInput: string | number): Promise<F95Record
             $('meta[name="description"]').attr('content')?.replace(/^Overview:\s*/i, '').trim() ||
             '',
         version: versionFromHeadline(headline) || versionFromPost,
+        tags,
         url: threadUrl,
     };
 

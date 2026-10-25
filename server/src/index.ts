@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createReadStream } from 'node:fs';
 import superjson from 'superjson';
 import { z } from 'zod';
 import { config } from './config.js';
@@ -16,10 +17,13 @@ import {
   GameSourceError,
   gameFieldsSchema,
   getGame,
+  getGameMedia,
   gamesListQuerySchema,
+  listGameFiles,
   listGames,
   patchGame,
   replaceGame,
+  resolveGameFile,
   updateLibrary,
 } from './games.js';
 
@@ -148,6 +152,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (request.method === 'GET') {
       const parsed = gamesListQuerySchema.safeParse({
         search: url.searchParams.get('search') ?? undefined,
+        service: url.searchParams.get('service') ?? undefined,
         limit: url.searchParams.get('limit') ?? undefined,
         offset: url.searchParams.get('offset') ?? undefined,
       });
@@ -176,6 +181,69 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     }
 
     sendJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const gameFilesMatch = url.pathname.match(/^\/api\/games\/([^/]+)\/files$/);
+  if (gameFilesMatch && request.method === 'GET') {
+    let id: string;
+    try {
+      id = decodeURIComponent(gameFilesMatch[1]);
+    } catch {
+      sendJson(response, 400, { error: 'Invalid game ID' });
+      return;
+    }
+    if (!(await getGame(id))) {
+      sendJson(response, 404, { error: 'Game not found' });
+      return;
+    }
+    sendJson(response, 200, { data: await listGameFiles(id) });
+    return;
+  }
+
+  const gameFileMatch = url.pathname.match(/^\/api\/games\/([^/]+)\/files\/(.+)$/);
+  if (gameFileMatch && request.method === 'GET') {
+    let id: string;
+    let name: string;
+    try {
+      id = decodeURIComponent(gameFileMatch[1]);
+      name = decodeURIComponent(gameFileMatch[2]);
+    } catch {
+      sendJson(response, 400, { error: 'Invalid game file path' });
+      return;
+    }
+    const resolved = await resolveGameFile(id, name);
+    if (!resolved) {
+      sendJson(response, 404, { error: 'File not found' });
+      return;
+    }
+    response.writeHead(200, {
+      'content-type': resolved.contentType,
+      'content-length': resolved.size,
+      'access-control-allow-origin': config.CLIENT_ORIGIN,
+      'cache-control': 'no-store',
+    });
+    const stream = createReadStream(resolved.absolutePath);
+    stream.pipe(response);
+    stream.on('error', () => response.destroy());
+    return;
+  }
+
+  const gameMediaMatch = url.pathname.match(/^\/api\/games\/([^/]+)\/media$/);
+  if (gameMediaMatch && request.method === 'GET') {
+    let id: string;
+    try {
+      id = decodeURIComponent(gameMediaMatch[1]);
+    } catch {
+      sendJson(response, 400, { error: 'Invalid game ID' });
+      return;
+    }
+    const media = await getGameMedia(id);
+    if (!media) {
+      sendJson(response, 404, { error: 'Game not found' });
+      return;
+    }
+    sendJson(response, 200, { data: media });
     return;
   }
 

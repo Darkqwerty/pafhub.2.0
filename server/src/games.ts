@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { type Dirent } from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,6 +62,7 @@ export const createGameSchema = z.object({
 
 export const gamesListQuerySchema = z.object({
     search: z.string().trim().max(100).optional(),
+    service: z.enum(['steam', 'rawg', 'f95', 'epic']).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     offset: z.coerce.number().int().min(0).default(0)
 });
@@ -81,6 +83,16 @@ const dataFile = process.env.GAMES_DATA_FILE ?? defaultDataFile;
 const contentDirectory =
     process.env.CONTENT_DIR ?? fileURLToPath(new URL('../../content/', import.meta.url));
 const gamesFileSchema = z.array(gameSchema);
+
+const sourceDataFiles: Record<NonNullable<GameRecord['source']>['service'], string> = {
+    steam:
+        process.env.STEAM_DATA_FILE ?? fileURLToPath(new URL('../../db/steam.json', import.meta.url)),
+    rawg:
+        process.env.RAWG_DATA_FILE ?? fileURLToPath(new URL('../../db/rawg.json', import.meta.url)),
+    f95: process.env.F95_DATA_FILE ?? fileURLToPath(new URL('../../db/f95.json', import.meta.url)),
+    epic:
+        process.env.EPIC_DATA_FILE ?? fileURLToPath(new URL('../../db/epic.json', import.meta.url))
+};
 
 export function getGamesDatabase(): Promise<JsonDatabase<GameRecord>> {
     return JsonDatabase.open<GameRecord>(dataFile, gamesFileSchema);
@@ -111,25 +123,57 @@ function cleanDescription(value: unknown): string {
         .slice(0, 5000);
 }
 
-async function fetchSourceRecord(source: NonNullable<GameRecord['source']>): Promise<unknown> {
+type SourceFetchResult = { raw: unknown; link: string };
+
+async function fetchSourceRecord(source: NonNullable<GameRecord['source']>): Promise<SourceFetchResult> {
     try {
         switch (source.service) {
-            case 'steam':
-                return (await (await import('./importers/steam.js')).importSteamGame(source.id))
-                    .raw;
-            case 'rawg':
-                return (await (await import('./importers/rawg.js')).importRawgGame(source.id)).raw;
-            case 'f95':
-                return (await (await import('./importers/f95.js')).importF95Game(source.id)).raw;
-            case 'epic':
-                return (await (await import('./importers/epic.js')).importEpicGame(source.id)).raw;
+            case 'steam': {
+                const record = await (await import('./importers/steam.js')).importSteamGame(
+                    source.id
+                );
+                return { raw: record.raw, link: record.link };
+            }
+            case 'rawg': {
+                const record = await (await import('./importers/rawg.js')).importRawgGame(
+                    source.id
+                );
+                return { raw: record.raw, link: record.link };
+            }
+            case 'f95': {
+                const record = await (await import('./importers/f95.js')).importF95Game(source.id);
+                return { raw: record.raw, link: record.link };
+            }
+            case 'epic': {
+                const record = await (await import('./importers/epic.js')).importEpicGame(source.id);
+                return { raw: record.raw, link: record.link };
+            }
         }
     } catch (error) {
         throw new GameSourceError(error instanceof Error ? error.message : 'Source request failed');
     }
 }
 
-function mapSourceDetails(service: NonNullable<GameRecord['source']>['service'], rawValue: unknown) {
+function firstUrl(value: unknown): string | null {
+    return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function epicImage(rawValue: unknown): string | null {
+    const images = asObject(rawValue).keyImages;
+    if (Array.isArray(images)) {
+        for (const entry of images) {
+            const url = firstUrl(asObject(entry).url);
+            if (url) return url;
+        }
+    }
+    return null;
+}
+
+function mapSourceDetails(
+    service: NonNullable<GameRecord['source']>['service'],
+    rawValue: unknown,
+    link: string
+) {
     const root = asObject(rawValue);
     if (service === 'steam') {
         const details = asObject(root.data);
@@ -137,7 +181,9 @@ function mapSourceDetails(service: NonNullable<GameRecord['source']>['service'],
             title: text(details.name).slice(0, 200),
             description: cleanDescription(details.about_the_game ?? details.short_description),
             version: text(details.version).slice(0, 100),
-            online: false
+            online: false,
+            image: firstUrl(details.header_image),
+            link
         };
     }
     if (service === 'rawg') {
@@ -145,7 +191,9 @@ function mapSourceDetails(service: NonNullable<GameRecord['source']>['service'],
             title: text(root.name).slice(0, 200),
             description: cleanDescription(root.description_raw ?? root.description),
             version: text(root.version).slice(0, 100),
-            online: false
+            online: false,
+            image: firstUrl(root.background_image),
+            link
         };
     }
     if (service === 'epic') {
@@ -153,14 +201,18 @@ function mapSourceDetails(service: NonNullable<GameRecord['source']>['service'],
             title: text(root.title).slice(0, 200),
             description: cleanDescription(root.description ?? root.shortDescription),
             version: text(root.version).slice(0, 100),
-            online: false
+            online: false,
+            image: epicImage(rawValue),
+            link
         };
     }
     return {
         title: text(root.name ?? root.title).slice(0, 200),
         description: cleanDescription(root.overview ?? root.description),
         version: text(root.version).slice(0, 100),
-        online: false
+        online: false,
+        image: firstUrl(root.image ?? root.background_image),
+        link
     };
 }
 
@@ -185,10 +237,11 @@ export async function listGames(query: GamesListQuery) {
         .all()
         .filter(
             (game) =>
-                !search ||
-                `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source?.service ?? 'local'} ${game.source?.id ?? ''} ${game.status}`
-                    .toLocaleLowerCase()
-                    .includes(search)
+                (!query.service || game.source?.service === query.service) &&
+                (!search ||
+                    `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source?.service ?? 'local'} ${game.source?.id ?? ''} ${game.status}`
+                        .toLocaleLowerCase()
+                        .includes(search))
         );
 
     return {
@@ -231,7 +284,8 @@ export async function updateLibrary(service: GameService): Promise<LibraryUpdate
         const source = game.source;
         if (!source) continue;
         try {
-            const sourceDetails = mapSourceDetails(source.service, await fetchSourceRecord(source));
+            const fetched = await fetchSourceRecord(source);
+            const sourceDetails = mapSourceDetails(source.service, fetched.raw, fetched.link);
             const next = gameSchema.parse({
                 ...game,
                 title: sourceDetails.title || game.title,
@@ -260,7 +314,8 @@ export async function updateLibrary(service: GameService): Promise<LibraryUpdate
             if (knownSourceIds.has(ownedGame.id)) continue;
             try {
                 const source = { service, id: ownedGame.id };
-                const sourceDetails = mapSourceDetails(service, await fetchSourceRecord(source));
+                const fetched = await fetchSourceRecord(source);
+                const sourceDetails = mapSourceDetails(service, fetched.raw, fetched.link);
                 const next = gameSchema.parse({
                     id: randomUUID(),
                     title: sourceDetails.title || ownedGame.title,
@@ -305,9 +360,18 @@ export async function createGame(input: CreateGameInput): Promise<GameRecord | u
         if (duplicateSource) return undefined;
     }
 
-    const sourceDetails = source
-        ? mapSourceDetails(source.service, await fetchSourceRecord(source))
-        : { title: '', description: '', version: '', online: false };
+    let sourceDetails: {
+        title: string;
+        description: string;
+        version: string;
+        online: boolean;
+    };
+    if (source) {
+        const fetched = await fetchSourceRecord(source);
+        sourceDetails = mapSourceDetails(source.service, fetched.raw, fetched.link);
+    } else {
+        sourceDetails = { title: '', description: '', version: '', online: false };
+    }
     const title = input.title?.trim() || sourceDetails.title;
     if (!title && source)
         throw new GameSourceError(
@@ -380,4 +444,164 @@ export async function deleteGame(id: string): Promise<boolean> {
     if (!database.delete(id)) return false;
     await database.save();
     return true;
+}
+
+export type GameFileEntry = {
+    name: string;
+    kind: 'file' | 'directory';
+};
+
+export type ResolvedGameFile = {
+    absolutePath: string;
+    contentType: string;
+    size: number;
+};
+
+const contentTypes: Record<string, string> = {
+    '.html': 'text/html; charset=utf-8',
+    '.htm': 'text/html; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.map': 'application/json; charset=utf-8',
+    '.txt': 'text/plain; charset=utf-8',
+    '.md': 'text/plain; charset=utf-8',
+    '.xml': 'application/xml; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.avif': 'image/avif',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.ogg': 'audio/ogg',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.otf': 'font/otf',
+    '.eot': 'application/vnd.ms-fontobject',
+    '.pdf': 'application/pdf',
+    '.zip': 'application/zip'
+};
+
+function contentTypeFor(name: string): string {
+    return contentTypes[path.extname(name).toLowerCase()] ?? 'application/octet-stream';
+}
+
+function resolveGameFolder(game: GameRecord): string | undefined {
+    if (!game.folder) return undefined;
+    const root = path.resolve(contentDirectory);
+    const target = path.resolve(root, game.folder);
+    if (!target.startsWith(`${root}${path.sep}`)) {
+        throw new Error('Folder must be inside the content directory');
+    }
+    return target;
+}
+
+async function readGameDirectory(target: string): Promise<Dirent[]> {
+    try {
+        return await fsp.readdir(target, { withFileTypes: true });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw error;
+    }
+}
+
+/** Lists the first-level files and directories inside the game's content folder. */
+export async function listGameFiles(id: string): Promise<GameFileEntry[]> {
+    const game = await getGame(id);
+    if (!game) return [];
+    const target = resolveGameFolder(game);
+    if (!target) return [];
+    const entries = await readGameDirectory(target);
+    return entries
+        .map((entry) => ({
+            name: entry.name,
+            kind: (entry.isDirectory() ? 'directory' : 'file') as GameFileEntry['kind']
+        }))
+        .sort((a, b) => {
+            if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
+            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true });
+        });
+}
+
+/**
+ * Resolves a file inside the game's content folder for serving. The name may
+ * contain subdirectories (e.g. `images/cover.png`) so an HTML page can load its
+ * relative media, but is constrained to stay inside the game folder.
+ */
+export async function resolveGameFile(
+    id: string,
+    name: string
+): Promise<ResolvedGameFile | undefined> {
+    const game = await getGame(id);
+    if (!game) return undefined;
+    const target = resolveGameFolder(game);
+    if (!target) return undefined;
+    if (!name || name.includes('\\') || name.includes('\0')) return undefined;
+    if (name.startsWith('/') || name.split('/').some((segment) => segment === '..')) {
+        return undefined;
+    }
+    const absolutePath = path.resolve(target, name);
+    if (absolutePath === target || !absolutePath.startsWith(`${target}${path.sep}`)) {
+        return undefined;
+    }
+    try {
+        const stat = await fsp.stat(absolutePath);
+        if (!stat.isFile()) return undefined;
+        return { absolutePath, contentType: contentTypeFor(name), size: stat.size };
+    } catch {
+        return undefined;
+    }
+}
+
+async function loadStoredSourceRecords(
+    service: NonNullable<GameRecord['source']>['service']
+): Promise<Map<string, { link: string; raw: unknown }>> {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(await fsp.readFile(sourceDataFiles[service], 'utf8'));
+    } catch {
+        return new Map();
+    }
+    if (!Array.isArray(parsed)) return new Map();
+    const records = new Map<string, { link: string; raw: unknown }>();
+    for (const entry of parsed) {
+        if (!entry || typeof entry !== 'object') continue;
+        const record = entry as Record<string, unknown>;
+        const id = record.id;
+        const link = typeof record.link === 'string' ? record.link : '';
+        if ((typeof id === 'string' || typeof id === 'number') && link) {
+            records.set(String(id), { link, raw: record.raw });
+        }
+    }
+    return records;
+}
+
+export type GameMedia = {
+    image: string | null;
+    link: string | null;
+};
+
+/**
+ * Computes the store link and cover image for a game on demand from the
+ * already-imported source record (no network call), so the card can show them
+ * without persisting them into games.json.
+ */
+export async function getGameMedia(id: string): Promise<GameMedia | undefined> {
+    const game = await getGame(id);
+    if (!game) return undefined;
+    const source = game.source;
+    if (!source) return { image: null, link: null };
+    const record = (await loadStoredSourceRecords(source.service)).get(String(source.id));
+    if (!record) return { image: null, link: null };
+    const details = mapSourceDetails(source.service, record.raw, record.link);
+    return { image: details.image, link: details.link };
 }

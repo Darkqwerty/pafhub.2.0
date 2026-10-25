@@ -37,6 +37,13 @@ const serviceOptions = [
     { value: 'f95', label: 'F95' }
 ];
 
+const libraryNames: Record<GameService, string> = {
+    steam: 'Steam',
+    epic: 'Epic Games',
+    rawg: 'RAWG',
+    f95: 'F95'
+};
+
 const epicSourceIdPattern = /^[^:\s]+:[^:\s]+$/;
 
 /** Epic identifies records as `namespace:catalogItemId`; the other providers use numeric IDs. */
@@ -233,9 +240,9 @@ export default function PopularGames({
             <div className="section-heading catalog-heading">
                 <div>
                     <div className="section-overline">
-                        <IconTerminal2 size={14} /> ls ~/games
+                        <IconTerminal2 size={14} /> ls ~/{library}
                     </div>
-                    <h2>games</h2>
+                    <h2>{libraryNames[library]}</h2>
                 </div>
                 <div className="games-heading-actions">
                     <span className="games-count">
