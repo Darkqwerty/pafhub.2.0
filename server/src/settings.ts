@@ -9,10 +9,18 @@ export const settingsSchema = z.object({
     STEAM_ID: z.string().default(''),
     STEAM_LOGIN: z.string(),
     STEAM_PASSWORD: z.string(),
+    STEAM_SYNC_VERSION: z.boolean().default(true),
     EPIC_CLIENT_ID: z.string().default(''),
     EPIC_CLIENT_SECRET: z.string().default(''),
     EPIC_ACCOUNT_ID: z.string().default(''),
+    EPIC_SYNC_VERSION: z.boolean().default(true),
     EPIC_REFRESH_TOKEN: z.string().default(''),
+    RAWG_SYNC_VERSION: z.boolean().default(true),
+    F95_SYNC_VERSION: z.boolean().default(true),
+    STEAM_SHOW_VERSION: z.boolean().default(true),
+    EPIC_SHOW_VERSION: z.boolean().default(true),
+    RAWG_SHOW_VERSION: z.boolean().default(true),
+    F95_SHOW_VERSION: z.boolean().default(true),
 });
 
 export const settingsUpdateSchema = settingsSchema.partial();
@@ -38,10 +46,18 @@ export function emptySettings(): Settings {
         STEAM_ID: '',
         STEAM_LOGIN: '',
         STEAM_PASSWORD: '',
+        STEAM_SYNC_VERSION: true,
         EPIC_CLIENT_ID: '',
         EPIC_CLIENT_SECRET: '',
         EPIC_ACCOUNT_ID: '',
+        EPIC_SYNC_VERSION: true,
         EPIC_REFRESH_TOKEN: '',
+        RAWG_SYNC_VERSION: true,
+        F95_SYNC_VERSION: true,
+        STEAM_SHOW_VERSION: true,
+        EPIC_SHOW_VERSION: true,
+        RAWG_SHOW_VERSION: true,
+        F95_SHOW_VERSION: true,
     };
 }
 

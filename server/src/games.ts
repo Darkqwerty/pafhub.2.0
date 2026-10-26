@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { JsonDatabase } from './lib/jsondb.js';
+import { getSettings } from './settings.js';
 import type { OwnedGame } from './importers/types.js';
 
 export const gameStatusSchema = z.enum(['Completed', 'Uncompleted', 'Played', 'WantPlay']);
@@ -244,8 +245,15 @@ export async function listGames(query: GamesListQuery) {
                         .includes(search))
         );
 
+    const page = filtered.slice(query.offset, query.offset + query.limit);
+    const sourceVersions = await loadSourceVersions(page);
+    const data = page.map((game) => ({
+        ...game,
+        sourceVersion: sourceVersions.get(game.id) ?? ''
+    }));
+
     return {
-        data: filtered.slice(query.offset, query.offset + query.limit),
+        data,
         total: filtered.length,
         limit: query.limit,
         offset: query.offset
@@ -275,6 +283,15 @@ async function fetchOwnedGames(service: GameService): Promise<OwnedGame[]> {
 
 export async function updateLibrary(service: GameService): Promise<LibraryUpdateResult> {
     const database = await getGamesDatabase();
+    const settings = await getSettings();
+    const syncVersion =
+        service === 'steam'
+            ? settings.STEAM_SYNC_VERSION
+            : service === 'rawg'
+                ? settings.RAWG_SYNC_VERSION
+                : service === 'epic'
+                    ? settings.EPIC_SYNC_VERSION
+                    : settings.F95_SYNC_VERSION;
     const games = database.all().filter((game) => game.source?.service === service);
     const errors: string[] = [];
     let updated = 0;
@@ -290,7 +307,7 @@ export async function updateLibrary(service: GameService): Promise<LibraryUpdate
                 ...game,
                 title: sourceDetails.title || game.title,
                 description: sourceDetails.description || game.description,
-                version: sourceDetails.version || game.version,
+                version: syncVersion ? sourceDetails.version || game.version : game.version,
                 online: game.online || sourceDetails.online
             });
             database.upsert(next);
@@ -585,23 +602,73 @@ async function loadStoredSourceRecords(
     return records;
 }
 
+/**
+ * Resolves the current upstream version for each game from the already-imported
+ * source records (steam.json / rawg.json / f95.json / epic.json), reading each
+ * service file only once. Used to compare the stored version against the source.
+ */
+async function loadSourceVersions(
+    games: GameRecord[]
+): Promise<Map<string, string>> {
+    const versions = new Map<string, string>();
+    const byService = new Map<NonNullable<GameRecord['source']>['service'], GameRecord[]>();
+    for (const game of games) {
+        const service = game.source?.service;
+        if (!service) continue;
+        const group = byService.get(service);
+        if (group) group.push(game);
+        else byService.set(service, [game]);
+    }
+    for (const [service, serviceGames] of byService) {
+        const records = await loadStoredSourceRecords(service);
+        for (const game of serviceGames) {
+            const record = records.get(String(game.source!.id));
+            if (!record) continue;
+            versions.set(game.id, mapSourceDetails(service, record.raw, record.link).version);
+        }
+    }
+    return versions;
+}
+
 export type GameMedia = {
     image: string | null;
     link: string | null;
 };
 
+const COVER_CANDIDATES = ['cover.png', 'cover.jpg', 'cover.jpeg', 'cover.webp'];
+
 /**
- * Computes the store link and cover image for a game on demand from the
- * already-imported source record (no network call), so the card can show them
- * without persisting them into games.json.
+ * Computes the store link and cover image for a game on demand. A local cover
+ * image (`cover.png` or a common image variant) inside the game's content folder
+ * takes precedence; otherwise the cover comes from the already-imported source
+ * record (no network call), so nothing needs to be persisted into games.json.
  */
 export async function getGameMedia(id: string): Promise<GameMedia | undefined> {
     const game = await getGame(id);
     if (!game) return undefined;
+
     const source = game.source;
-    if (!source) return { image: null, link: null };
-    const record = (await loadStoredSourceRecords(source.service)).get(String(source.id));
-    if (!record) return { image: null, link: null };
-    const details = mapSourceDetails(source.service, record.raw, record.link);
-    return { image: details.image, link: details.link };
+    let image: string | null = null;
+    let link: string | null = null;
+    if (source) {
+        const record = (await loadStoredSourceRecords(source.service)).get(String(source.id));
+        if (record) {
+            const details = mapSourceDetails(source.service, record.raw, record.link);
+            image = details.image;
+            link = details.link;
+        }
+    }
+
+    // Prefer a cover image placed in the game's own content folder.
+    if (game.folder) {
+        for (const name of COVER_CANDIDATES) {
+            const cover = await resolveGameFile(id, name);
+            if (cover) {
+                image = `/api/games/${encodeURIComponent(id)}/files/${name}`;
+                break;
+            }
+        }
+    }
+
+    return { image, link };
 }

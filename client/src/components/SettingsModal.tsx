@@ -1,4 +1,4 @@
-import { Button, Divider, Group, Modal, PasswordInput, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, Modal, PasswordInput, TextInput } from '@mantine/core';
 import { useEffect, useState, type FormEvent } from 'react';
 import { HintButton } from './HintButton';
 import {
@@ -9,10 +9,20 @@ import {
   updateSettings,
 } from '../data/settingsApi';
 import type { Settings } from '../types/settings';
+import type { GameService } from '../types/game';
 
 type SettingsModalProps = {
   opened: boolean;
   onClose: () => void;
+  library: GameService;
+  onSaved?: (settings: Settings) => void;
+};
+
+const libraryNames: Record<GameService, string> = {
+  steam: 'Steam',
+  epic: 'Epic Games',
+  rawg: 'RAWG',
+  f95: 'F95',
 };
 
 const emptySettings: Settings = {
@@ -21,12 +31,20 @@ const emptySettings: Settings = {
   STEAM_ID: '',
   STEAM_LOGIN: '',
   STEAM_PASSWORD: '',
+  STEAM_SYNC_VERSION: true,
   EPIC_CLIENT_ID: '',
   EPIC_CLIENT_SECRET: '',
   EPIC_ACCOUNT_ID: '',
+  EPIC_SYNC_VERSION: true,
+  RAWG_SYNC_VERSION: true,
+  F95_SYNC_VERSION: true,
+  STEAM_SHOW_VERSION: true,
+  EPIC_SHOW_VERSION: true,
+  RAWG_SHOW_VERSION: true,
+  F95_SHOW_VERSION: true,
 };
 
-export function SettingsModal({ opened, onClose }: SettingsModalProps) {
+export function SettingsModal({ opened, onClose, library, onSaved }: SettingsModalProps) {
   const [draft, setDraft] = useState<Settings>(emptySettings);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -111,6 +129,7 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
     try {
       const saved = await updateSettings(draft);
       setDraft(saved);
+      onSaved?.(saved);
       onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not save settings');
@@ -120,87 +139,163 @@ export function SettingsModal({ opened, onClose }: SettingsModalProps) {
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Settings" centered>
+    <Modal opened={opened} onClose={onClose} title={`${libraryNames[library]} settings`} centered>
       <form className="game-editor" onSubmit={save}>
         {loading ? (
           <p className="games-message">Loading settings…</p>
         ) : (
           <>
-            <PasswordInput
-              label="RAWG API key"
-              value={draft.RAWG_API_KEY}
-              onChange={(event) => setField('RAWG_API_KEY', event.currentTarget.value)}
-            />
-            <PasswordInput
-              label="Steam API key"
-              value={draft.STEAM_API_KEY}
-              onChange={(event) => setField('STEAM_API_KEY', event.currentTarget.value)}
-            />
-            <TextInput
-              label="Steam ID"
-              description="17-digit SteamID64 used to list your owned games."
-              value={draft.STEAM_ID}
-              onChange={(event) => setField('STEAM_ID', event.currentTarget.value)}
-            />
-            <TextInput
-              label="Steam login"
-              value={draft.STEAM_LOGIN}
-              onChange={(event) => setField('STEAM_LOGIN', event.currentTarget.value)}
-            />
-            <PasswordInput
-              label="Steam password"
-              value={draft.STEAM_PASSWORD}
-              onChange={(event) => setField('STEAM_PASSWORD', event.currentTarget.value)}
-            />
+            {library === 'rawg' ? (
+              <>
+                <PasswordInput
+                  label="RAWG API key"
+                  value={draft.RAWG_API_KEY}
+                  onChange={(event) => setField('RAWG_API_KEY', event.currentTarget.value)}
+                />
+                <Checkbox
+                  label="Sync version from external service"
+                  checked={draft.RAWG_SYNC_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, RAWG_SYNC_VERSION: event.currentTarget.checked }))
+                  }
+                />
+                <Checkbox
+                  label="Show version column"
+                  checked={draft.RAWG_SHOW_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, RAWG_SHOW_VERSION: event.currentTarget.checked }))
+                  }
+                />
+              </>
+            ) : null}
 
-            <Divider label="Epic Games" labelPosition="left" my="xs" />
-            <TextInput
-              label="Epic client ID"
-              description="OAuth client used for Epic login. Defaults to the Epic Games Launcher client."
-              value={draft.EPIC_CLIENT_ID}
-              onChange={(event) => setField('EPIC_CLIENT_ID', event.currentTarget.value)}
-            />
-            <PasswordInput
-              label="Epic client secret"
-              description="OAuth client secret. Change only when using your own Epic client."
-              value={draft.EPIC_CLIENT_SECRET}
-              onChange={(event) => setField('EPIC_CLIENT_SECRET', event.currentTarget.value)}
-            />
-            <TextInput
-              label="Epic account ID"
-              description="Filled in automatically once you authorize below."
-              value={draft.EPIC_ACCOUNT_ID}
-              readOnly
-            />
-            <Group gap="xs">
-              <Button type="button" variant="default" onClick={startEpicAuth} disabled={epicBusy}>
-                Open Epic login
-              </Button>
-              <Button
-                type="button"
-                variant="default"
-                color="red"
-                onClick={disconnect}
-                disabled={epicBusy || !draft.EPIC_ACCOUNT_ID}
-              >
-                Disconnect
-              </Button>
-            </Group>
-            <TextInput
-              label="Authorization code"
-              description="Paste the authorizationCode returned by the Epic login page."
-              value={epicCode}
-              onChange={(event) => setEpicCode(event.currentTarget.value)}
-            />
-            <Button
-              type="button"
-              variant="light"
-              onClick={submitEpicCode}
-              disabled={epicBusy || !epicCode.trim()}
-            >
-              {epicBusy ? 'Connecting…' : 'Connect Epic account'}
-            </Button>
-            {epicMessage ? <p className="games-message">{epicMessage}</p> : null}
+            {library === 'steam' ? (
+              <>
+                <PasswordInput
+                  label="Steam API key"
+                  value={draft.STEAM_API_KEY}
+                  onChange={(event) => setField('STEAM_API_KEY', event.currentTarget.value)}
+                />
+                <TextInput
+                  label="Steam ID"
+                  description="17-digit SteamID64 used to list your owned games."
+                  value={draft.STEAM_ID}
+                  onChange={(event) => setField('STEAM_ID', event.currentTarget.value)}
+                />
+                <TextInput
+                  label="Steam login"
+                  value={draft.STEAM_LOGIN}
+                  onChange={(event) => setField('STEAM_LOGIN', event.currentTarget.value)}
+                />
+                <PasswordInput
+                  label="Steam password"
+                  value={draft.STEAM_PASSWORD}
+                  onChange={(event) => setField('STEAM_PASSWORD', event.currentTarget.value)}
+                />
+                <Checkbox
+                  label="Sync version from external service"
+                  checked={draft.STEAM_SYNC_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, STEAM_SYNC_VERSION: event.currentTarget.checked }))
+                  }
+                />
+                <Checkbox
+                  label="Show version column"
+                  checked={draft.STEAM_SHOW_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, STEAM_SHOW_VERSION: event.currentTarget.checked }))
+                  }
+                />
+              </>
+            ) : null}
+
+            {library === 'epic' ? (
+              <>
+                <TextInput
+                  label="Epic client ID"
+                  description="OAuth client used for Epic login. Defaults to the Epic Games Launcher client."
+                  value={draft.EPIC_CLIENT_ID}
+                  onChange={(event) => setField('EPIC_CLIENT_ID', event.currentTarget.value)}
+                />
+                <PasswordInput
+                  label="Epic client secret"
+                  description="OAuth client secret. Change only when using your own Epic client."
+                  value={draft.EPIC_CLIENT_SECRET}
+                  onChange={(event) => setField('EPIC_CLIENT_SECRET', event.currentTarget.value)}
+                />
+                <TextInput
+                  label="Epic account ID"
+                  description="Filled in automatically once you authorize below."
+                  value={draft.EPIC_ACCOUNT_ID}
+                  readOnly
+                />
+                <Checkbox
+                  label="Sync version from external service"
+                  checked={draft.EPIC_SYNC_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, EPIC_SYNC_VERSION: event.currentTarget.checked }))
+                  }
+                />
+                <Checkbox
+                  label="Show version column"
+                  checked={draft.EPIC_SHOW_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, EPIC_SHOW_VERSION: event.currentTarget.checked }))
+                  }
+                />
+                <Group gap="xs">
+                  <Button type="button" variant="default" onClick={startEpicAuth} disabled={epicBusy}>
+                    Open Epic login
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="default"
+                    color="red"
+                    onClick={disconnect}
+                    disabled={epicBusy || !draft.EPIC_ACCOUNT_ID}
+                  >
+                    Disconnect
+                  </Button>
+                </Group>
+                <TextInput
+                  label="Authorization code"
+                  description="Paste the authorizationCode returned by the Epic login page."
+                  value={epicCode}
+                  onChange={(event) => setEpicCode(event.currentTarget.value)}
+                />
+                <Button
+                  type="button"
+                  variant="light"
+                  onClick={submitEpicCode}
+                  disabled={epicBusy || !epicCode.trim()}
+                >
+                  {epicBusy ? 'Connecting…' : 'Connect Epic account'}
+                </Button>
+                {epicMessage ? <p className="games-message">{epicMessage}</p> : null}
+              </>
+            ) : null}
+
+            {library === 'f95' ? (
+              <>
+                <p className="games-message">
+                  F95 requires no configuration — thread metadata is imported publicly.
+                </p>
+                <Checkbox
+                  label="Sync version from external service"
+                  checked={draft.F95_SYNC_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, F95_SYNC_VERSION: event.currentTarget.checked }))
+                  }
+                />
+                <Checkbox
+                  label="Show version column"
+                  checked={draft.F95_SHOW_VERSION}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, F95_SHOW_VERSION: event.currentTarget.checked }))
+                  }
+                />
+              </>
+            ) : null}
           </>
         )}
         {error ? (

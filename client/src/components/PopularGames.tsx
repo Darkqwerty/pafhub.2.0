@@ -11,8 +11,11 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { IconTerminal2 } from '@tabler/icons-react';
 import { GameDetails } from './GameDetails';
 import { HintButton } from './HintButton';
+import { SettingsModal } from './SettingsModal';
 import { createGame, deleteGame, updateGame } from '../data/gamesApi';
 import type { CreateGameInput } from '../data/gamesApi';
+import { getSettings } from '../data/settingsApi';
+import type { Settings } from '../types/settings';
 import type { Game, GameService, GameStatus } from '../types/game';
 
 type PopularGamesProps = {
@@ -42,6 +45,13 @@ const libraryNames: Record<GameService, string> = {
     epic: 'Epic Games',
     rawg: 'RAWG',
     f95: 'F95'
+};
+
+const showVersionKey: Record<GameService, keyof Settings> = {
+    steam: 'STEAM_SHOW_VERSION',
+    epic: 'EPIC_SHOW_VERSION',
+    rawg: 'RAWG_SHOW_VERSION',
+    f95: 'F95_SHOW_VERSION'
 };
 
 const epicSourceIdPattern = /^[^:\s]+:[^:\s]+$/;
@@ -85,6 +95,22 @@ export default function PopularGames({
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [sorting, setSorting] = useState<{ id: SortId; desc: boolean }>({ id: 'title', desc: false });
     const [sortOpen, setSortOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [settings, setSettings] = useState<Settings | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        getSettings()
+            .then((loaded) => {
+                if (active) setSettings(loaded);
+            })
+            .catch(() => {
+                if (active) setSettings(null);
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const startEdit = useCallback((game: Game) => {
         setEditingGame(game);
@@ -127,9 +153,29 @@ export default function PopularGames({
         [displayGames, selectedId]
     );
 
-    const columns = useMemo<MRT_ColumnDef<Game>[]>(
-        () => [
-            { accessorKey: 'title', header: 'GAME', size: 320 },
+    const showVersionColumn = settings ? settings[showVersionKey[library]] : true;
+
+    const columns = useMemo<MRT_ColumnDef<Game>[]>(() => {
+        const result: MRT_ColumnDef<Game>[] = [{ accessorKey: 'title', header: 'GAME', size: 320 }];
+        if (showVersionColumn) {
+            result.push({
+                accessorKey: 'version',
+                header: 'VERSION',
+                size: 320,
+                Cell: ({ row }) => {
+                    const local = row.original.version.trim();
+                    const source = (row.original.sourceVersion ?? '').trim();
+                    const differs = Boolean(local && source && local !== source);
+                    return (
+                        <span className={differs ? 'version-mismatch' : undefined}>
+                            {local || '—'}
+                            {source ? ` (${source})` : ''}
+                        </span>
+                    );
+                }
+            });
+        }
+        result.push(
             {
                 accessorKey: 'description',
                 header: 'DESCRIPTION',
@@ -157,9 +203,9 @@ export default function PopularGames({
                     return <span className={`status-text status-${status.toLowerCase()}`}>{status}</span>;
                 }
             }
-        ],
-        []
-    );
+        );
+        return result;
+    }, [showVersionColumn]);
 
     const closeEditor = () => {
         if (!saving) {
@@ -286,6 +332,9 @@ export default function PopularGames({
                     </HintButton>
                     <HintButton keyLabel="a" title="Add game" onClick={openCreateForm}>
                         Add game
+                    </HintButton>
+                    <HintButton keyLabel="s" title={`${libraryNames[library]} settings`} onClick={() => setSettingsOpen(true)}>
+                        Settings
                     </HintButton>
                 </div>
             </div>
@@ -525,6 +574,13 @@ export default function PopularGames({
                     </div>
                 ) : null}
             </Modal>
+
+            <SettingsModal
+                opened={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+                library={library}
+                onSaved={setSettings}
+            />
         </section>
     );
 }

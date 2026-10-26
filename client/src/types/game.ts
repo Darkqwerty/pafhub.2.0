@@ -13,4 +13,5 @@ export type Game = {
   status: GameStatus;
   folder: string;
   online: boolean;
+  sourceVersion?: string;
 };

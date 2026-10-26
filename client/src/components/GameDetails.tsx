@@ -1,7 +1,7 @@
-import { Badge } from '@mantine/core';
 import { IconPhoto } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { HintButton } from './HintButton';
+import { HintLink } from './HintLink';
 import { getGameFiles, getGameMedia } from '../data/gamesApi';
 import type { GameFileEntry, GameMedia } from '../data/gamesApi';
 import type { Game } from '../types/game';
@@ -113,9 +113,39 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
         );
     };
 
+    const localVersion = game?.version.trim() ?? '';
+    const sourceVersion = (game?.sourceVersion ?? '').trim();
+    const versionMismatch = Boolean(localVersion && sourceVersion && localVersion !== sourceVersion);
+
     return (
         <aside className="game-detail" aria-live="polite">
-            <div className="detail-panel-title">game info</div>
+            <div className="detail-panel-title">
+                <span className="detail-panel-title-text">info</span>
+                {game ? (
+                    <div className="detail-panel-actions">
+                        {media?.link ? (
+                            <HintLink
+                                keyLabel="t"
+                                href={media.link}
+                                title={`Open ${game.title} in ${game.source?.service ?? 'store'}`}
+                            >
+                                Store
+                            </HintLink>
+                        ) : null}
+                        <HintButton keyLabel="e" title={`Edit ${game.title}`} onClick={() => onEdit(game)}>
+                            Edit
+                        </HintButton>
+                        <HintButton
+                            keyLabel="d"
+                            danger
+                            title={`Delete ${game.title}`}
+                            onClick={() => onDelete(game)}
+                        >
+                            Delete
+                        </HintButton>
+                    </div>
+                ) : null}
+            </div>
             {game ? (
                 <div className="detail-body">
                     {media?.image && !imageFailed ? (
@@ -133,57 +163,31 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                         </div>
                     )}
                     <h3 className="detail-name">{game.title || 'Untitled'}</h3>
-                    <Badge
-                        variant="light"
-                        color="gray"
-                        radius="sm"
-                        className={`status-badge status-${game.status.toLowerCase()}`}
-                    >
-                        {game.status}
-                    </Badge>
-                    {media?.link ? (
-                        <a
-                            className="detail-external-link"
-                            href={media.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            open in {game.source?.service ?? 'store'} ↗
-                        </a>
-                    ) : null}
                     <dl className="detail-grid">
-                        <dt>source</dt>
-                        <dd>{game.source ? `${game.source.service}:${game.source.id}` : 'local'}</dd>
+                        <dt>status</dt>
+                        <dd>
+                            <span className={`status-text status-${game.status.toLowerCase()}`}>
+                                {game.status}
+                            </span>
+                        </dd>
                         <dt>version</dt>
-                        <dd>{game.version || '—'}</dd>
-                        <dt>folder</dt>
-                        <dd>{game.folder || '—'}</dd>
-                        <dt>online</dt>
-                        <dd>{game.online ? 'yes' : 'no'}</dd>
-                        <dt>id</dt>
-                        <dd className="detail-id">{game.id}</dd>
+                        <dd>
+                            <span className={versionMismatch ? 'version-mismatch' : undefined}>
+                                {localVersion || '—'}
+                                {sourceVersion ? ` (${sourceVersion})` : ''}
+                            </span>
+                        </dd>
                     </dl>
                     <div className="detail-section-label">description</div>
                     <p className="detail-desc">{game.description || 'No description'}</p>
                     {game.folder ? (
                         <>
-                            <div className="detail-section-label">files</div>
+                            <div className="detail-section-label">
+                                files <span className="detail-folder">{game.folder}</span>
+                            </div>
                             {renderFiles()}
                         </>
                     ) : null}
-                    <div className="detail-actions">
-                        <HintButton keyLabel="e" title={`Edit ${game.title}`} onClick={() => onEdit(game)}>
-                            Edit
-                        </HintButton>
-                        <HintButton
-                            keyLabel="d"
-                            danger
-                            title={`Delete ${game.title}`}
-                            onClick={() => onDelete(game)}
-                        >
-                            Delete
-                        </HintButton>
-                    </div>
                 </div>
             ) : (
                 <p className="detail-empty">select a game to inspect its details</p>

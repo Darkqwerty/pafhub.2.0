@@ -417,6 +417,7 @@ button { font: inherit; cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.version-mismatch { color: var(--yellow); }
 .rating-cell { color: var(--green); }
 .row-actions { display: flex; align-items: center; gap: 4px; }
 .filter-button {
@@ -446,7 +447,11 @@ button { font: inherit; cursor: pointer; }
 }
 .detail-panel-title {
   flex: 0 0 auto;
-  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
   background: var(--panel-3);
   border-bottom: 1px solid var(--line);
   color: var(--accent);
@@ -454,8 +459,8 @@ button { font: inherit; cursor: pointer; }
   letter-spacing: 0.06em;
   text-transform: lowercase;
 }
-.detail-panel-title::before { content: '┤ '; color: var(--line); }
-.detail-panel-title::after { content: ' ├'; color: var(--line); }
+.detail-panel-title-text::before { content: '┤ '; color: var(--line); }
+.detail-panel-actions { display: flex; align-items: center; gap: 2px; text-transform: none; }
 .detail-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -471,6 +476,7 @@ button { font: inherit; cursor: pointer; }
 .detail-grid dd { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
 .detail-id { color: var(--faint); font-size: 10px; }
 .detail-section-label { color: var(--cyan); font: 700 10px var(--font); letter-spacing: 0.08em; text-transform: uppercase; }
+.detail-folder { color: var(--muted); font-weight: 400; letter-spacing: normal; text-transform: none; }
 .detail-desc { margin: 0; color: var(--fg-2); font: 11px/1.6 var(--font); white-space: pre-wrap; }
 .detail-image {
   display: block;
@@ -491,13 +497,6 @@ button { font: inherit; cursor: pointer; }
   color: var(--muted);
   font: 10px var(--font);
 }
-.detail-external-link {
-  align-self: flex-start;
-  color: var(--accent);
-  font: 600 11px var(--font);
-  text-decoration: none;
-}
-.detail-external-link:hover { color: var(--cyan); text-decoration: underline; }
 .detail-files-note { margin: 0; color: var(--muted); font: 10px var(--font); }
 .detail-files-error { color: var(--red); }
 .detail-files {
@@ -512,7 +511,6 @@ button { font: inherit; cursor: pointer; }
 .detail-file-link { color: var(--accent); text-decoration: none; }
 .detail-file-link::before { content: '↗ '; color: var(--faint); }
 .detail-file-link:hover { color: var(--cyan); text-decoration: underline; }
-.detail-actions { margin-top: auto; display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
 .detail-empty { padding: 14px 12px; margin: 0; color: var(--muted); font: 11px var(--font); }
 
 /* ==================== editor forms ==================== */
@@ -539,6 +537,7 @@ button { font: inherit; cursor: pointer; }
 .hint-btn:hover .hint-key { color: var(--cyan); }
 .hint-btn:hover .hint-label { color: var(--fg); }
 .hint-compact { padding: 2px 5px; font-size: 10px; }
+.hint-link { text-decoration: none; }
 .hint-btn.hint-danger .hint-key { color: var(--red); }
 .hint-btn.hint-danger:hover { background: rgba(247, 118, 142, 0.12); border-color: rgba(247, 118, 142, 0.45); }
 .hint-btn.hint-danger:hover .hint-key { color: var(--red); }
