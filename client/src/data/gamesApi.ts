@@ -102,6 +102,43 @@ export async function getGameMedia(id: string): Promise<GameMedia> {
   return result.data;
 }
 
+export async function getGameNotes(id: string): Promise<string> {
+  const result = await request<{ data: { text: string } }>(
+    `/api/games/${encodeURIComponent(id)}/notes`,
+  );
+  return result.data.text;
+}
+
+export async function saveGameNotes(id: string, text: string): Promise<string> {
+  const result = await request<{ data: { text: string } }>(
+    `/api/games/${encodeURIComponent(id)}/notes`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ text }),
+    },
+  );
+  return result.data.text;
+}
+
+export async function uploadGameCover(id: string, file: File): Promise<string> {
+  const url = `/api/games/${encodeURIComponent(id)}/cover`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': file.type || 'application/octet-stream' },
+    body: await file.arrayBuffer(),
+  });
+  const serialized = await readJsonBody(response, url);
+  const payload = unwrapSuperJson<unknown>(serialized);
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    if (payload && typeof payload === 'object' && 'error' in payload) {
+      message = String((payload as { error: unknown }).error);
+    }
+    throw new Error(message);
+  }
+  return (payload as { data: { name: string } }).data.name;
+}
+
 export async function updateGame(id: string, changes: Partial<Omit<Game, 'id'>>): Promise<Game> {
   const result = await request<{ data: Game }>(`/api/games/${encodeURIComponent(id)}`, {
     method: 'PATCH',

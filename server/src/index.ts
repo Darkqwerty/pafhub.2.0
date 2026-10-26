@@ -18,12 +18,15 @@ import {
   gameFieldsSchema,
   getGame,
   getGameMedia,
+  getGameNotes,
   gamesListQuerySchema,
   listGameFiles,
   listGames,
   patchGame,
   replaceGame,
   resolveGameFile,
+  saveGameCover,
+  saveGameNotes,
   updateLibrary,
 } from './games.js';
 
@@ -59,6 +62,29 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
     throw new RequestBodyError(400, 'Invalid JSON body');
   }
 }
+
+async function readRawBody(request: IncomingMessage, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maxBytes) throw new RequestBodyError(413, 'Request body is too large');
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
+const coverContentTypes: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/svg+xml': '.svg',
+  'image/avif': '.avif',
+  'image/bmp': '.bmp',
+  'image/x-icon': '.ico',
+};
 
 async function handleRequest(request: IncomingMessage, response: ServerResponse) {
   if (request.method === 'OPTIONS') {
@@ -244,6 +270,80 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       return;
     }
     sendJson(response, 200, { data: media });
+    return;
+  }
+
+  const gameNotesMatch = url.pathname.match(/^\/api\/games\/([^/]+)\/notes$/);
+  if (gameNotesMatch) {
+    let id: string;
+    try {
+      id = decodeURIComponent(gameNotesMatch[1]);
+    } catch {
+      sendJson(response, 400, { error: 'Invalid game ID' });
+      return;
+    }
+    const game = await getGame(id);
+    if (!game) {
+      sendJson(response, 404, { error: 'Game not found' });
+      return;
+    }
+    if (!game.folder) {
+      sendJson(response, 400, { error: 'Game has no folder' });
+      return;
+    }
+
+    if (request.method === 'GET') {
+      sendJson(response, 200, { data: { text: (await getGameNotes(id)) ?? '' } });
+      return;
+    }
+
+    if (request.method === 'PUT') {
+      const body = await readJsonBody(request);
+      const parsed = z.object({ text: z.string().max(100_000) }).safeParse(body);
+      if (!parsed.success) {
+        sendJson(response, 400, { error: 'Invalid notes', details: parsed.error.flatten() });
+        return;
+      }
+      await saveGameNotes(id, parsed.data.text);
+      sendJson(response, 200, { data: { text: parsed.data.text } });
+      return;
+    }
+
+    sendJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const gameCoverMatch = url.pathname.match(/^\/api\/games\/([^/]+)\/cover$/);
+  if (gameCoverMatch && request.method === 'POST') {
+    let id: string;
+    try {
+      id = decodeURIComponent(gameCoverMatch[1]);
+    } catch {
+      sendJson(response, 400, { error: 'Invalid game ID' });
+      return;
+    }
+    const game = await getGame(id);
+    if (!game) {
+      sendJson(response, 404, { error: 'Game not found' });
+      return;
+    }
+    if (!game.folder) {
+      sendJson(response, 400, { error: 'Game has no folder' });
+      return;
+    }
+    const contentType = (request.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+    const extension = coverContentTypes[contentType];
+    if (!extension) {
+      sendJson(response, 400, { error: 'Unsupported image type' });
+      return;
+    }
+    const data = await readRawBody(request, 15 * 1024 * 1024);
+    const name = await saveGameCover(id, data, extension);
+    if (!name) {
+      sendJson(response, 500, { error: 'Could not save cover' });
+      return;
+    }
+    sendJson(response, 200, { data: { name } });
     return;
   }
 

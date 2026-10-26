@@ -511,6 +511,24 @@ button { font: inherit; cursor: pointer; }
 .detail-file-link { color: var(--accent); text-decoration: none; }
 .detail-file-link::before { content: '↗ '; color: var(--faint); }
 .detail-file-link:hover { color: var(--cyan); text-decoration: underline; }
+.detail-file-note-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: 11px var(--font);
+  cursor: pointer;
+  text-align: left;
+}
+.detail-file-note-link:hover { color: var(--cyan); text-decoration: underline; }
+.detail-files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.detail-cover-input { display: none; }
 .detail-empty { padding: 14px 12px; margin: 0; color: var(--muted); font: 11px var(--font); }
 
 /* ==================== editor forms ==================== */

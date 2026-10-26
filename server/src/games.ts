@@ -579,6 +579,57 @@ export async function resolveGameFile(
     }
 }
 
+const notesFileName = 'notes.txt';
+
+/** Reads the `notes.txt` note from the game's content folder (empty if absent). */
+export async function getGameNotes(id: string): Promise<string | undefined> {
+    const game = await getGame(id);
+    const target = game ? resolveGameFolder(game) : undefined;
+    if (!target) return undefined;
+    try {
+        return await fsp.readFile(path.join(target, notesFileName), 'utf8');
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+        throw error;
+    }
+}
+
+/** Writes the note to `notes.txt` in the game's content folder. */
+export async function saveGameNotes(id: string, text: string): Promise<boolean> {
+    const game = await getGame(id);
+    const target = game ? resolveGameFolder(game) : undefined;
+    if (!target) return false;
+    await fsp.mkdir(target, { recursive: true });
+    await fsp.writeFile(path.join(target, notesFileName), text, 'utf8');
+    return true;
+}
+
+const coverFilePattern = /^cover\./i;
+
+/**
+ * Stores an uploaded cover image as `cover.<ext>` inside the game's content
+ * folder, replacing any existing cover file first.
+ */
+export async function saveGameCover(
+    id: string,
+    data: Buffer,
+    extension: string
+): Promise<string | undefined> {
+    const game = await getGame(id);
+    const target = game ? resolveGameFolder(game) : undefined;
+    if (!target) return undefined;
+    await fsp.mkdir(target, { recursive: true });
+    const entries = await readGameDirectory(target);
+    await Promise.all(
+        entries
+            .filter((entry) => entry.isFile() && coverFilePattern.test(entry.name))
+            .map((entry) => fsp.rm(path.join(target, entry.name), { force: true }))
+    );
+    const name = `cover${extension}`;
+    await fsp.writeFile(path.join(target, name), data);
+    return name;
+}
+
 async function loadStoredSourceRecords(
     service: NonNullable<GameRecord['source']>['service']
 ): Promise<Map<string, { link: string; raw: unknown }>> {

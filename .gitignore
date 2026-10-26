@@ -138,4 +138,4 @@ server/tsconfig.json
 client/tsconfig.json
 db/*.json
 package-lock.json
-content/galactic_outlaws/cover.png
+content/
