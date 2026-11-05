@@ -734,13 +734,11 @@ export type GameMedia = {
     link: string | null;
 };
 
-const COVER_CANDIDATES = ['cover.png', 'cover.jpg', 'cover.jpeg', 'cover.webp'];
-
 /**
  * Computes the store link and cover image for a game on demand. A local cover
- * image (`cover.png` or a common image variant) inside the game's content folder
- * takes precedence; otherwise the cover comes from the already-imported source
- * record (no network call), so nothing needs to be persisted into games.json.
+ * image inside the game's content folder takes precedence; otherwise the cover
+ * comes from the already-imported source record (no network call), so nothing
+ * needs to be persisted into games.json.
  */
 export async function getGameMedia(id: string): Promise<GameMedia | undefined> {
     const game = await getGame(id);
@@ -758,14 +756,14 @@ export async function getGameMedia(id: string): Promise<GameMedia | undefined> {
         }
     }
 
-    // Prefer a cover image placed in the game's own content folder.
+    // Prefer a cover image placed in the game's own content folder, regardless
+    // of its extension (cover.png, cover.jpg, cover.webp, cover.gif, …).
     if (game.folder) {
-        for (const name of COVER_CANDIDATES) {
-            const cover = await resolveGameFile(id, name);
-            if (cover) {
-                image = `/api/games/${encodeURIComponent(id)}/files/${name}`;
-                break;
-            }
+        const cover = (await listGameFiles(id)).find(
+            (entry) => entry.kind === 'file' && coverFilePattern.test(entry.name)
+        );
+        if (cover) {
+            image = `/api/games/${encodeURIComponent(id)}/files/${encodeURIComponent(cover.name)}`;
         }
     }
 
