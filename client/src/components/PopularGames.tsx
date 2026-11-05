@@ -8,10 +8,12 @@ import {
 } from '@mantine/core';
 import { MantineReactTable, type MRT_ColumnDef } from 'mantine-react-table';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { IconSearch, IconTerminal2 } from '@tabler/icons-react';
-import { GameDetails } from './GameDetails';
+import { IconSearch } from '@tabler/icons-react';
+import { FilesPanel } from './FilesPanel';
+import { GameCard } from './GameCard';
 import { HintButton } from './HintButton';
 import { SettingsModal } from './SettingsModal';
+import { useBlockAvailability, useBlockKeys, useTerminal } from '../terminal/TerminalContext';
 import { createGame, deleteGame, getGames, updateGame } from '../data/gamesApi';
 import type { CreateGameInput } from '../data/gamesApi';
 import { getSettings } from '../data/settingsApi';
@@ -100,12 +102,16 @@ export default function PopularGames({
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [sorting, setSorting] = useState<{ id: SortId; desc: boolean }>({ id: 'title', desc: false });
     const [sortOpen, setSortOpen] = useState(false);
+    const [sortCursor, setSortCursor] = useState(0);
+    const { activeBlock } = useTerminal();
+    const gamesActive = activeBlock === 'games';
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [settings, setSettings] = useState<Settings | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [searchEverywhere, setSearchEverywhere] = useState(false);
     const [allGames, setAllGames] = useState<Game[] | null>(null);
+    const [mediaNonce, setMediaNonce] = useState(0);
     const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -182,7 +188,7 @@ export default function PopularGames({
         });
     }, [displayGames]);
 
-    // When a game is requested from outside (e.g. the random-game card), clear
+    // When a game is requested from outside (e.g. the random-game block), clear
     // any active search so the game is visible, select it, then scroll the list
     // so the selected row is in view.
     useEffect(() => {
@@ -331,111 +337,204 @@ export default function PopularGames({
         }
     };
 
+    useBlockAvailability('games', true);
+
+    useBlockKeys('games', (event) => {
+        const key = event.key;
+
+        // Esc (or the sort key again) dismisses the sort menu.
+        if (sortOpen) {
+            if (key === 'Escape' || key.toLowerCase() === 's') {
+                event.preventDefault();
+                setSortOpen(false);
+            } else if (key === 'ArrowDown') {
+                event.preventDefault();
+                setSortCursor((cursor) => (cursor + 1) % sortColumns.length);
+            } else if (key === 'ArrowUp') {
+                event.preventDefault();
+                setSortCursor((cursor) => (cursor - 1 + sortColumns.length) % sortColumns.length);
+            } else if (key === 'Enter') {
+                event.preventDefault();
+                chooseSort(sortColumns[sortCursor].id);
+            }
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            event.preventDefault();
+            if (displayGames.length === 0) return;
+            const index = selectedId ? displayGames.findIndex((game) => game.id === selectedId) : -1;
+            const nextIndex = Math.min(index + 1, displayGames.length - 1);
+            const next = displayGames[nextIndex];
+            if (next) setSelectedId(next.id);
+            return;
+        }
+        if (key === 'ArrowUp') {
+            event.preventDefault();
+            if (displayGames.length === 0) return;
+            const index = selectedId
+                ? displayGames.findIndex((game) => game.id === selectedId)
+                : displayGames.length;
+            const prevIndex = Math.max((index <= 0 ? displayGames.length : index) - 1, 0);
+            const prev = displayGames[prevIndex];
+            if (prev) setSelectedId(prev.id);
+            return;
+        }
+
+        const lower = key.toLowerCase();
+        if (key === '/') {
+            event.preventDefault();
+            setSearchOpen(true);
+            return;
+        }
+        if (lower === 's') {
+            event.preventDefault();
+            setSortCursor(0);
+            setSortOpen((open) => !open);
+            return;
+        }
+        if (lower === 'u' && library !== 'local' && !updatingLibrary) {
+            event.preventDefault();
+            onUpdateLibrary();
+            return;
+        }
+        if (lower === 'a') {
+            event.preventDefault();
+            openCreateForm();
+            return;
+        }
+        if (lower === 'p' && library !== 'local') {
+            event.preventDefault();
+            setSettingsOpen(true);
+            return;
+        }
+    });
+
+    // Keep the arrow-selected row in view while the games block is focused.
+    useEffect(() => {
+        if (!gamesActive) return;
+        const index = displayGames.findIndex((game) => game.id === selectedId);
+        if (index === -1) return;
+        tableContainerRef.current
+            ?.querySelector(`tr[data-index="${index}"]`)
+            ?.scrollIntoView({ block: 'nearest' });
+    }, [selectedId, gamesActive, displayGames]);
+
     return (
         <section className="catalog-section">
-            <div className="section-heading catalog-heading">
-                <div>
-                    <div className="section-overline">
-                        <IconTerminal2 size={14} /> ls ~/{library}
-                    </div>
-                    <h2>{libraryNames[library]}</h2>
-                </div>
-                <div className="games-heading-actions">
-                    <HintButton keyLabel="/" title="Search games" onClick={() => setSearchOpen(true)}>
-                        Search
-                    </HintButton>
-                    <div className="sort-control">
-                        <HintButton keyLabel="s" title="Sort by column" onClick={() => setSortOpen((open) => !open)}>
-                            Sort
-                        </HintButton>
-                        {sortOpen ? (
-                            <>
-                                <div className="sort-backdrop" onClick={() => setSortOpen(false)} />
-                                <div className="sort-menu" role="menu">
-                                    {sortColumns.map((column) => {
-                                        const active = sorting.id === column.id;
-                                        return (
-                                            <button
-                                                key={column.id}
-                                                type="button"
-                                                role="menuitemradio"
-                                                aria-checked={active}
-                                                className={`sort-item${active ? ' active' : ''}`}
-                                                onClick={() => chooseSort(column.id)}
-                                            >
-                                                <span>{column.label}</span>
-                                                <span className="sort-dir">{active ? (sorting.desc ? '▼' : '▲') : ''}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </>
-                        ) : null}
-                    </div>
-                    {library !== 'local' ? (
-                        <HintButton
-                            keyLabel="u"
-                            title={`Update ${library} library`}
-                            disabled={updatingLibrary}
-                            onClick={onUpdateLibrary}
-                        >
-                            {updatingLibrary ? 'Updating…' : 'Update library'}
-                        </HintButton>
-                    ) : null}
-                    <HintButton keyLabel="a" title="Add game" onClick={openCreateForm}>
-                        Add game
-                    </HintButton>
-                    {library !== 'local' ? (
-                        <HintButton keyLabel="s" title={`${libraryNames[library]} settings`} onClick={() => setSettingsOpen(true)}>
-                            Settings
-                        </HintButton>
-                    ) : null}
-                </div>
-            </div>
-            {libraryUpdateMessage ? (
-                <p
-                    className={`games-message ${libraryUpdateMessage.kind === 'error' ? 'games-error' : ''}`}
-                    role={libraryUpdateMessage.kind === 'error' ? 'alert' : 'status'}
-                >
-                    {libraryUpdateMessage.text}
-                </p>
-            ) : null}
-            {error ? (
-                <p className="games-message games-error" role="alert">
-                    Could not load games: {error}
-                </p>
-            ) : null}
-            {!error && !loading && games.length === 0 ? (
-                <p className="games-message">No games found in games.json.</p>
-            ) : null}
             <div className="catalog-body">
-                <div className="table-wrap">
-                    <MantineReactTable
-                        columns={columns}
-                        data={displayGames}
-                        getRowId={(game) => game.id}
-                        state={{ isLoading: loading, showProgressBars: loading }}
-                        enableTopToolbar={false}
-                        enableBottomToolbar={false}
-                        enableColumnActions={false}
-                        enableColumnFilters={false}
-                        enablePagination={false}
-                        enableDensityToggle={false}
-                        enableFullScreenToggle={false}
-                        enableHiding={false}
-                        enableSorting={false}
-                        enableStickyHeader
-                        mantineTableContainerProps={{ ref: tableContainerRef }}
-                        mantineTableProps={{ striped: false, highlightOnHover: true }}
-                        mantineTableBodyRowProps={({ row }) => ({
-                            onClick: () => setSelectedId(row.id),
-                            className: row.id === selectedId ? 'row-selected' : undefined,
-                            style: { cursor: 'pointer' }
-                        })}
-                        mantinePaperProps={{ shadow: 'none' }}
+                <div className={`games-frame term-block ${gamesActive ? 'is-active' : ''}`}>
+                    <header className="frame-header">
+                        <span className="frame-title">[2] GAMES</span>
+                        <div className="frame-actions">
+                            <HintButton keyLabel="/" compact title="Search games" onClick={() => setSearchOpen(true)}>
+                                Search
+                            </HintButton>
+                            <div className="sort-control">
+                                <HintButton keyLabel="s" compact title="Sort by column" onClick={() => setSortOpen((open) => !open)}>
+                                    Sort
+                                </HintButton>
+                                {sortOpen ? (
+                                    <>
+                                        <div className="sort-backdrop" onClick={() => setSortOpen(false)} />
+                                        <div className="sort-menu" role="menu">
+                                            {sortColumns.map((column, index) => {
+                                                const active = sorting.id === column.id;
+                                                const cursor = sortCursor === index;
+                                                return (
+                                                    <button
+                                                        key={column.id}
+                                                        type="button"
+                                                        role="menuitemradio"
+                                                        aria-checked={active}
+                                                        className={`sort-item${active ? ' active' : ''}${cursor ? ' sort-cursor' : ''}`}
+                                                        onClick={() => chooseSort(column.id)}
+                                                    >
+                                                        <span>{column.label}</span>
+                                                        <span className="sort-dir">{active ? (sorting.desc ? '▼' : '▲') : ''}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                ) : null}
+                            </div>
+                            {library !== 'local' ? (
+                                <HintButton
+                                    keyLabel="u"
+                                    compact
+                                    title={`Update ${library} library`}
+                                    disabled={updatingLibrary}
+                                    onClick={onUpdateLibrary}
+                                >
+                                    {updatingLibrary ? 'Updating…' : 'Update library'}
+                                </HintButton>
+                            ) : null}
+                            <HintButton keyLabel="a" compact title="Add game" onClick={openCreateForm}>
+                                Add game
+                            </HintButton>
+                            {library !== 'local' ? (
+                                <HintButton keyLabel="p" compact title={`${libraryNames[library]} settings`} onClick={() => setSettingsOpen(true)}>
+                                    Settings
+                                </HintButton>
+                            ) : null}
+                        </div>
+                    </header>
+                    {libraryUpdateMessage ? (
+                        <p
+                            className={`games-message ${libraryUpdateMessage.kind === 'error' ? 'games-error' : ''}`}
+                            role={libraryUpdateMessage.kind === 'error' ? 'alert' : 'status'}
+                        >
+                            {libraryUpdateMessage.text}
+                        </p>
+                    ) : null}
+                    {error ? (
+                        <p className="games-message games-error" role="alert">
+                            Could not load games: {error}
+                        </p>
+                    ) : null}
+                    {!error && !loading && games.length === 0 ? (
+                        <p className="games-message">No games found in games.json.</p>
+                    ) : null}
+                    <div className="table-wrap">
+                        <MantineReactTable
+                            columns={columns}
+                            data={displayGames}
+                            getRowId={(game) => game.id}
+                            state={{ isLoading: loading, showProgressBars: loading }}
+                            enableTopToolbar={false}
+                            enableBottomToolbar={false}
+                            enableColumnActions={false}
+                            enableColumnFilters={false}
+                            enablePagination={false}
+                            enableDensityToggle={false}
+                            enableFullScreenToggle={false}
+                            enableHiding={false}
+                            enableSorting={false}
+                            enableStickyHeader
+                            mantineTableContainerProps={{ ref: tableContainerRef }}
+                            mantineTableProps={{ striped: false, highlightOnHover: true }}
+                            mantineTableBodyRowProps={({ row }) => ({
+                                onClick: () => setSelectedId(row.id),
+                                className: row.id === selectedId ? 'row-selected' : undefined,
+                                style: { cursor: 'pointer' }
+                            })}
+                            mantinePaperProps={{ shadow: 'none' }}
+                        />
+                    </div>
+                </div>
+                <div className="detail-column">
+                    <GameCard
+                        game={selectedGame}
+                        onEdit={startEdit}
+                        onDelete={startDelete}
+                        mediaNonce={mediaNonce}
+                    />
+                    <FilesPanel
+                        game={selectedGame}
+                        onCoverUploaded={() => setMediaNonce((n) => n + 1)}
                     />
                 </div>
-                <GameDetails game={selectedGame} onEdit={startEdit} onDelete={startDelete} />
             </div>
 
             <Modal

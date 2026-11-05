@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { PageFooter } from './components/PageFooter';
 import { Sidebar } from './components/Sidebar';
 import { getGameCounts, getGames, updateLibrary } from './data/gamesApi';
+import { TerminalProvider } from './terminal/TerminalContext';
 import type { Game, GameCounts, GameServiceFilter } from './types/game';
 
 const PopularGames = lazy(() => import('./components/PopularGames'));
@@ -135,33 +136,35 @@ function App() {
   };
 
   return (
-    <div className="app-shell">
-      <Sidebar
-        library={library}
-        counts={counts}
-        onLibraryChange={handleLibraryChange}
-        onOpenGame={handleOpenGame}
-      />
-      <main className="main-content" id="top">
-        <Suspense fallback={<section className="catalog-section" aria-busy="true">Loading catalog…</section>}>
-          <PopularGames
-            games={games}
-            loading={loadingGames}
-            error={gamesError}
-            onGameUpdated={handleGameUpdated}
-            onGameCreated={handleGameCreated}
-            onGameDeleted={handleGameDeleted}
-            library={library}
-            updatingLibrary={updatingLibrary}
-            onUpdateLibrary={handleUpdateLibrary}
-            libraryUpdateMessage={libraryUpdateMessage}
-            selectGameId={pendingSelection}
-            onSelectGameHandled={() => setPendingSelection(null)}
-          />
-        </Suspense>
-        <PageFooter />
-      </main>
-    </div>
+    <TerminalProvider>
+      <div className="app-shell">
+        <Sidebar
+          library={library}
+          counts={counts}
+          onLibraryChange={handleLibraryChange}
+          onOpenGame={handleOpenGame}
+        />
+        <main className="main-content" id="top">
+          <Suspense fallback={<section className="catalog-section" aria-busy="true">Loading catalog…</section>}>
+            <PopularGames
+              games={games}
+              loading={loadingGames}
+              error={gamesError}
+              onGameUpdated={handleGameUpdated}
+              onGameCreated={handleGameCreated}
+              onGameDeleted={handleGameDeleted}
+              library={library}
+              updatingLibrary={updatingLibrary}
+              onUpdateLibrary={handleUpdateLibrary}
+              libraryUpdateMessage={libraryUpdateMessage}
+              selectGameId={pendingSelection}
+              onSelectGameHandled={() => setPendingSelection(null)}
+            />
+          </Suspense>
+          <PageFooter />
+        </main>
+      </div>
+    </TerminalProvider>
   );
 }
 

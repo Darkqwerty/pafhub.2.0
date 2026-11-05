@@ -1,37 +1,46 @@
 import { Modal, Textarea } from '@mantine/core';
-import { IconPhoto } from '@tabler/icons-react';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { HintButton } from './HintButton';
-import { HintLink } from './HintLink';
 import {
     getGameFiles,
-    getGameMedia,
     getGameNotes,
     saveGameNotes,
     uploadGameCover,
     uploadGameSave
 } from '../data/gamesApi';
-import type { GameFileEntry, GameMedia } from '../data/gamesApi';
+import type { GameFileEntry } from '../data/gamesApi';
+import { useBlockAvailability, useBlockKeys, useTerminal } from '../terminal/TerminalContext';
 import type { Game } from '../types/game';
 
-type GameDetailsProps = {
+type FilesPanelProps = {
     game: Game | null;
-    onEdit: (game: Game) => void;
-    onDelete: (game: Game) => void;
+    onCoverUploaded?: () => void;
 };
 
 function isHtmlFile(name: string): boolean {
     return /\.html?$/i.test(name);
 }
 
-export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
+/** Returns the kind of action a file entry supports (if any). */
+function fileActionKind(entry: GameFileEntry): 'notes' | 'open' | 'download' | null {
+    if (entry.kind === 'directory') return null;
+    if (entry.name.toLowerCase() === 'notes.txt') return 'notes';
+    if (isHtmlFile(entry.name)) return 'open';
+    if (/\.save$/i.test(entry.name)) return 'download';
+    return null;
+}
+
+export function FilesPanel({ game, onCoverUploaded }: FilesPanelProps) {
+    const { activeBlock } = useTerminal();
+    const active = activeBlock === 'files';
+    const hasFolder = Boolean(game?.folder);
+    useBlockAvailability('files', hasFolder);
+
     const [files, setFiles] = useState<GameFileEntry[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
     const [filesError, setFilesError] = useState<string | null>(null);
     const [filesNonce, setFilesNonce] = useState(0);
-
-    const [media, setMedia] = useState<GameMedia | null>(null);
-    const [imageFailed, setImageFailed] = useState(false);
+    const [fileIndex, setFileIndex] = useState(0);
 
     const [notesOpen, setNotesOpen] = useState(false);
     const [notesDraft, setNotesDraft] = useState('');
@@ -47,45 +56,28 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
 
     const coverInputRef = useRef<HTMLInputElement>(null);
     const saveInputRef = useRef<HTMLInputElement>(null);
+    const listRef = useRef<HTMLUListElement | null>(null);
 
     useEffect(() => {
-        let active = true;
-        setMedia(null);
-        setImageFailed(false);
-        if (!game) return undefined;
-
-        getGameMedia(game.id)
-            .then((result) => {
-                if (active) setMedia(result);
-            })
-            .catch(() => {
-                if (active) setMedia({ image: null, link: null });
-            });
-        return () => {
-            active = false;
-        };
-    }, [game?.id]);
-
-    useEffect(() => {
-        let active = true;
+        let alive = true;
         setFiles([]);
         setFilesError(null);
+        setFileIndex(0);
         if (!game) return undefined;
 
         setFilesLoading(true);
         getGameFiles(game.id)
             .then((entries) => {
-                if (active) setFiles(entries);
+                if (alive) setFiles(entries);
             })
             .catch((error: unknown) => {
-                if (active)
-                    setFilesError(error instanceof Error ? error.message : 'Could not load files');
+                if (alive) setFilesError(error instanceof Error ? error.message : 'Could not load files');
             })
             .finally(() => {
-                if (active) setFilesLoading(false);
+                if (alive) setFilesLoading(false);
             });
         return () => {
-            active = false;
+            alive = false;
         };
     }, [game?.id, filesNonce]);
 
@@ -94,14 +86,6 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
     const hasNotesFile = files.some(
         (entry) => entry.kind === 'file' && entry.name.toLowerCase() === 'notes.txt'
     );
-
-    const coverFile = game
-        ? files.find((entry) => entry.kind === 'file' && /^cover\./i.test(entry.name))
-        : undefined;
-    const displayImage =
-        game && coverFile
-            ? `/api/games/${encodeURIComponent(game.id)}/files/${encodeURIComponent(coverFile.name)}`
-            : media?.image ?? null;
 
     const openNotesEditor = async () => {
         if (!game) return;
@@ -145,8 +129,8 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
         setCoverError(null);
         try {
             await uploadGameCover(game.id, file);
-            setImageFailed(false);
             refreshFiles();
+            onCoverUploaded?.();
         } catch (error) {
             setCoverError(error instanceof Error ? error.message : 'Could not upload cover');
         } finally {
@@ -170,6 +154,72 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
         }
     };
 
+    const fileUrl = (name: string) =>
+        `/api/games/${encodeURIComponent(game!.id)}/files/${encodeURIComponent(name)}`;
+
+    /** Activates the currently selected file via the Enter key. */
+    const activateEntry = (entry: GameFileEntry) => {
+        const kind = fileActionKind(entry);
+        if (kind === 'notes') openNotesEditor();
+        else if (kind === 'open') window.open(fileUrl(entry.name), '_blank', 'noopener,noreferrer');
+        else if (kind === 'download') {
+            const anchor = document.createElement('a');
+            anchor.href = `${fileUrl(entry.name)}?download=1`;
+            anchor.download = '';
+            anchor.click();
+        }
+    };
+
+    useBlockKeys('files', (event) => {
+        if (!game) return;
+        const key = event.key;
+
+        if (key === 'ArrowDown' && files.length) {
+            event.preventDefault();
+            setFileIndex((index) => Math.min(index + 1, files.length - 1));
+            return;
+        }
+        if (key === 'ArrowUp' && files.length) {
+            event.preventDefault();
+            setFileIndex((index) => Math.max(index - 1, 0));
+            return;
+        }
+        if (key === 'Enter' && files.length) {
+            event.preventDefault();
+            activateEntry(files[fileIndex]);
+            return;
+        }
+
+        const lower = key.toLowerCase();
+        if (lower === 'n' && !hasNotesFile) {
+            event.preventDefault();
+            void openNotesEditor();
+            return;
+        }
+        if (lower === 'c') {
+            event.preventDefault();
+            if (!coverUploading) coverInputRef.current?.click();
+            return;
+        }
+        if (lower === 'u') {
+            event.preventDefault();
+            if (!saveUploading) saveInputRef.current?.click();
+            return;
+        }
+    });
+
+    // Keep the file cursor within bounds and scrolled into view.
+    useEffect(() => {
+        setFileIndex((index) => Math.min(index, Math.max(files.length - 1, 0)));
+    }, [files.length]);
+
+    useEffect(() => {
+        if (!active) return;
+        listRef.current?.querySelector('[data-file-index="' + fileIndex + '"]')?.scrollIntoView({
+            block: 'nearest'
+        });
+    }, [fileIndex, active]);
+
     const renderFiles = () => {
         if (filesLoading) {
             return <p className="detail-files-note">Loading files…</p>;
@@ -185,19 +235,32 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
             return <p className="detail-files-note">no files</p>;
         }
         return (
-            <ul className="detail-files">
-                {files.map((entry) => {
-                    const isDirectory = entry.kind === 'directory';
-                    if (isDirectory) {
+            <ul className="detail-files" ref={listRef}>
+                {files.map((entry, index) => {
+                    const kind = fileActionKind(entry);
+                    const selected = index === fileIndex;
+                    const selectedClass = active && selected ? ' file-selected' : '';
+
+                    if (entry.kind === 'directory') {
                         return (
-                            <li key={entry.name} className="detail-file is-directory">
+                            <li
+                                key={entry.name}
+                                data-file-index={index}
+                                className={`detail-file is-directory${selectedClass}`}
+                                onClick={() => setFileIndex(index)}
+                            >
                                 {entry.name}/
                             </li>
                         );
                     }
-                    if (entry.name.toLowerCase() === 'notes.txt') {
+                    if (kind === 'notes') {
                         return (
-                            <li key={entry.name} className="detail-file">
+                            <li
+                                key={entry.name}
+                                data-file-index={index}
+                                className={`detail-file${selectedClass}`}
+                                onClick={() => setFileIndex(index)}
+                            >
                                 <button
                                     type="button"
                                     className="detail-file-note-link"
@@ -208,12 +271,17 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                             </li>
                         );
                     }
-                    if (isHtmlFile(entry.name)) {
+                    if (kind === 'open') {
                         return (
-                            <li key={entry.name} className="detail-file">
+                            <li
+                                key={entry.name}
+                                data-file-index={index}
+                                className={`detail-file${selectedClass}`}
+                                onClick={() => setFileIndex(index)}
+                            >
                                 <a
                                     className="detail-file-link"
-                                    href={`/api/games/${encodeURIComponent(game!.id)}/files/${encodeURIComponent(entry.name)}`}
+                                    href={fileUrl(entry.name)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
@@ -224,17 +292,27 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                     }
                     if (/^cover\./i.test(entry.name)) {
                         return (
-                            <li key={entry.name} className="detail-file is-cover">
+                            <li
+                                key={entry.name}
+                                data-file-index={index}
+                                className={`detail-file is-cover${selectedClass}`}
+                                onClick={() => setFileIndex(index)}
+                            >
                                 {entry.name}
                             </li>
                         );
                     }
-                    if (/\.save$/i.test(entry.name)) {
+                    if (kind === 'download') {
                         return (
-                            <li key={entry.name} className="detail-file">
+                            <li
+                                key={entry.name}
+                                data-file-index={index}
+                                className={`detail-file${selectedClass}`}
+                                onClick={() => setFileIndex(index)}
+                            >
                                 <a
                                     className="detail-file-link detail-file-download"
-                                    href={`/api/games/${encodeURIComponent(game!.id)}/files/${encodeURIComponent(entry.name)}?download=1`}
+                                    href={`${fileUrl(entry.name)}?download=1`}
                                 >
                                     {entry.name}
                                 </a>
@@ -242,7 +320,12 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                         );
                     }
                     return (
-                        <li key={entry.name} className="detail-file">
+                        <li
+                            key={entry.name}
+                            data-file-index={index}
+                            className={`detail-file${selectedClass}`}
+                            onClick={() => setFileIndex(index)}
+                        >
                             {entry.name}
                         </li>
                     );
@@ -251,117 +334,66 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
         );
     };
 
-    const localVersion = game?.version.trim() ?? '';
-    const sourceVersion = (game?.sourceVersion ?? '').trim();
-    const versionMismatch = Boolean(localVersion && sourceVersion && localVersion !== sourceVersion);
-
     return (
-        <aside className="game-detail" aria-live="polite">
-            <div className="detail-panel-title">
-                <span className="detail-panel-title-text">info</span>
+        <section
+            className={`game-detail files-panel term-block ${active ? 'is-active' : ''}`}
+            aria-label="Game files"
+        >
+            <header className="frame-header">
+                <span className="frame-title">[4] FILES</span>
                 {game ? (
-                    <div className="detail-panel-actions">
-                        {media?.link ? (
-                            <HintLink
-                                keyLabel="t"
-                                href={media.link}
-                                title={`Open ${game.title} in ${game.source?.service ?? 'store'}`}
-                            >
-                                Store
-                            </HintLink>
+                    <div className="frame-actions">
+                        {!filesLoading && !filesError ? (
+                            <>
+                                {!hasNotesFile ? (
+                                    <HintButton keyLabel="n" compact title="Add notes" onClick={openNotesEditor}>
+                                        Add notes
+                                    </HintButton>
+                                ) : null}
+                                <HintButton
+                                    keyLabel="c"
+                                    compact
+                                    title="Add cover"
+                                    disabled={coverUploading}
+                                    onClick={() => coverInputRef.current?.click()}
+                                >
+                                    {coverUploading ? 'Uploading…' : 'Add cover'}
+                                </HintButton>
+                                <input
+                                    ref={coverInputRef}
+                                    type="file"
+                                    accept="image/*,image/gif"
+                                    className="detail-cover-input"
+                                    onChange={handleCoverFile}
+                                />
+                                <HintButton
+                                    keyLabel="u"
+                                    compact
+                                    title="Add save"
+                                    disabled={saveUploading}
+                                    onClick={() => saveInputRef.current?.click()}
+                                >
+                                    {saveUploading ? 'Uploading…' : 'Add save'}
+                                </HintButton>
+                                <input
+                                    ref={saveInputRef}
+                                    type="file"
+                                    className="detail-cover-input"
+                                    onChange={handleSaveFile}
+                                />
+                            </>
                         ) : null}
-                        <HintButton keyLabel="e" title={`Edit ${game.title}`} onClick={() => onEdit(game)}>
-                            Edit
-                        </HintButton>
-                        <HintButton
-                            keyLabel="d"
-                            danger
-                            title={`Delete ${game.title}`}
-                            onClick={() => onDelete(game)}
-                        >
-                            Delete
-                        </HintButton>
                     </div>
                 ) : null}
-            </div>
+            </header>
             {game ? (
-                <div className="detail-body">
-                    {displayImage && !imageFailed ? (
-                        <img
-                            className="detail-image"
-                            src={displayImage}
-                            alt={game.title}
-                            loading="lazy"
-                            onError={() => setImageFailed(true)}
-                        />
-                    ) : (
-                        <div className="detail-image-placeholder">
-                            <IconPhoto size={26} stroke={1.3} />
-                            <span>{media === null && !coverFile ? 'loading…' : 'no image'}</span>
-                        </div>
-                    )}
-                    <h3 className="detail-name">{game.title || 'Untitled'}</h3>
-                    <dl className="detail-grid">
-                        <dt>status</dt>
-                        <dd>
-                            <span className={`status-text status-${game.status.toLowerCase()}`}>
-                                {game.status}
-                            </span>
-                        </dd>
-                        <dt>version</dt>
-                        <dd>
-                            <span className={versionMismatch ? 'version-mismatch' : undefined}>
-                                {localVersion || '—'}
-                                {sourceVersion ? ` (${sourceVersion})` : ''}
-                            </span>
-                        </dd>
-                    </dl>
-                    <div className="detail-section-label">description</div>
-                    <p className="detail-desc">{game.description || 'No description'}</p>
+                <div className="detail-body files-body">
                     {game.folder ? (
                         <>
                             <div className="detail-section-label">
-                                files <span className="detail-folder">{game.folder}</span>
+                                <span className="detail-folder">{game.folder}</span>
                             </div>
                             {renderFiles()}
-                            {!filesLoading && !filesError ? (
-                                <div className="detail-files-actions">
-                                    {!hasNotesFile ? (
-                                        <HintButton keyLabel="n" title="Add notes" onClick={openNotesEditor}>
-                                            Add notes
-                                        </HintButton>
-                                    ) : null}
-                                    <HintButton
-                                        keyLabel="c"
-                                        title="Add cover"
-                                        disabled={coverUploading}
-                                        onClick={() => coverInputRef.current?.click()}
-                                    >
-                                        {coverUploading ? 'Uploading…' : 'Add cover'}
-                                    </HintButton>
-                                    <input
-                                        ref={coverInputRef}
-                                        type="file"
-                                        accept="image/*,image/gif"
-                                        className="detail-cover-input"
-                                        onChange={handleCoverFile}
-                                    />
-                                    <HintButton
-                                        keyLabel="u"
-                                        title="Add save"
-                                        disabled={saveUploading}
-                                        onClick={() => saveInputRef.current?.click()}
-                                    >
-                                        {saveUploading ? 'Uploading…' : 'Add save'}
-                                    </HintButton>
-                                    <input
-                                        ref={saveInputRef}
-                                        type="file"
-                                        className="detail-cover-input"
-                                        onChange={handleSaveFile}
-                                    />
-                                </div>
-                            ) : null}
                             {coverError ? (
                                 <p className="detail-files-note detail-files-error" role="alert">
                                     {coverError}
@@ -373,10 +405,12 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                                 </p>
                             ) : null}
                         </>
-                    ) : null}
+                    ) : (
+                        <p className="detail-empty">no folder assigned to this game</p>
+                    )}
                 </div>
             ) : (
-                <p className="detail-empty">select a game to inspect its details</p>
+                <p className="detail-empty">select a game to list its files</p>
             )}
 
             <Modal opened={notesOpen} onClose={closeNotes} title="Notes" centered>
@@ -412,6 +446,6 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                     </div>
                 </div>
             </Modal>
-        </aside>
+        </section>
     );
 }

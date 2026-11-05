@@ -6,7 +6,9 @@ import {
     IconFlame,
     IconWorld
 } from '@tabler/icons-react';
-import { RandomGameCard } from './RandomGameCard';
+import { useEffect, useRef } from 'react';
+import { RandomGameBlock } from './RandomGameBlock';
+import { useBlockAvailability, useBlockKeys, useTerminal } from '../terminal/TerminalContext';
 import type { Game, GameCounts, GameServiceFilter } from '../types/game';
 
 const services: Array<{ label: string; service: GameServiceFilter; icon: typeof IconCompass }> = [
@@ -25,6 +27,28 @@ type SidebarProps = {
 };
 
 export function Sidebar({ library, counts, onLibraryChange, onOpenGame }: SidebarProps) {
+    const { activeBlock } = useTerminal();
+    const active = activeBlock === 'services';
+    const activeItemRef = useRef<HTMLButtonElement | null>(null);
+
+    useBlockAvailability('services', true);
+
+    useBlockKeys('services', (event) => {
+        const current = services.findIndex((entry) => entry.service === library);
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            onLibraryChange(services[(current + 1) % services.length].service);
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            onLibraryChange(services[(current - 1 + services.length) % services.length].service);
+        }
+    });
+
+    // Keep the active service visible while navigating this block.
+    useEffect(() => {
+        if (active) activeItemRef.current?.scrollIntoView({ block: 'nearest' });
+    }, [library, active]);
+
     return (
         <aside className="sidebar">
             <a className="brand" href="#top">
@@ -33,25 +57,29 @@ export function Sidebar({ library, counts, onLibraryChange, onOpenGame }: Sideba
                     PAF<span className="brand-light">HUB</span>
                 </span>
             </a>
-            <div className="nav-label services-label"># SERVICES</div>
-            <nav className="primary-nav service-nav">
-                {services.map(({ label, service, icon: Icon }) => (
-                    <button
-                        className={`nav-item ${library === service ? 'active' : ''}`}
-                        key={service}
-                        onClick={() => onLibraryChange(service)}
-                    >
-                        <Icon size={17} stroke={1.8} />
-                        <span>{label}</span>
-                        <span className="nav-count">{counts[service] ?? 0}</span>
-                    </button>
-                ))}
-            </nav>
-            <div className="sidebar-bottom">
-                <div className="sidebar-promo">
-                    <RandomGameCard onOpen={onOpenGame} />
+            <section className={`services-block term-block ${active ? 'is-active' : ''}`}>
+                <header className="frame-header">
+                    <span className="frame-title">[1] SERVICES</span>
+                </header>
+                <div className="services-scroll">
+                    <nav className="primary-nav service-nav">
+                        {services.map(({ label, service, icon: Icon }) => (
+                            <button
+                                className={`nav-item ${library === service ? 'active' : ''}`}
+                                key={service}
+                                ref={library === service ? activeItemRef : undefined}
+                                onClick={() => onLibraryChange(service)}
+                                aria-current={library === service ? 'true' : undefined}
+                            >
+                                <Icon size={17} stroke={1.8} />
+                                <span>{label}</span>
+                                <span className="nav-count">{counts[service] ?? 0}</span>
+                            </button>
+                        ))}
+                    </nav>
                 </div>
-            </div>
+            </section>
+            <RandomGameBlock onOpen={onOpenGame} />
         </aside>
     );
 }
