@@ -8,7 +8,8 @@ import {
     getGameMedia,
     getGameNotes,
     saveGameNotes,
-    uploadGameCover
+    uploadGameCover,
+    uploadGameSave
 } from '../data/gamesApi';
 import type { GameFileEntry, GameMedia } from '../data/gamesApi';
 import type { Game } from '../types/game';
@@ -41,7 +42,11 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
     const [coverUploading, setCoverUploading] = useState(false);
     const [coverError, setCoverError] = useState<string | null>(null);
 
+    const [saveUploading, setSaveUploading] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
     const coverInputRef = useRef<HTMLInputElement>(null);
+    const saveInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         let active = true;
@@ -149,6 +154,22 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
         }
     };
 
+    const handleSaveFile = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = '';
+        if (!file || !game) return;
+        setSaveUploading(true);
+        setSaveError(null);
+        try {
+            await uploadGameSave(game.id, file);
+            refreshFiles();
+        } catch (error) {
+            setSaveError(error instanceof Error ? error.message : 'Could not upload save');
+        } finally {
+            setSaveUploading(false);
+        }
+    };
+
     const renderFiles = () => {
         if (filesLoading) {
             return <p className="detail-files-note">Loading files…</p>;
@@ -195,6 +216,25 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                                     href={`/api/games/${encodeURIComponent(game!.id)}/files/${encodeURIComponent(entry.name)}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                >
+                                    {entry.name}
+                                </a>
+                            </li>
+                        );
+                    }
+                    if (/^cover\./i.test(entry.name)) {
+                        return (
+                            <li key={entry.name} className="detail-file is-cover">
+                                {entry.name}
+                            </li>
+                        );
+                    }
+                    if (/\.save$/i.test(entry.name)) {
+                        return (
+                            <li key={entry.name} className="detail-file">
+                                <a
+                                    className="detail-file-link detail-file-download"
+                                    href={`/api/games/${encodeURIComponent(game!.id)}/files/${encodeURIComponent(entry.name)}?download=1`}
                                 >
                                     {entry.name}
                                 </a>
@@ -302,15 +342,34 @@ export function GameDetails({ game, onEdit, onDelete }: GameDetailsProps) {
                                     <input
                                         ref={coverInputRef}
                                         type="file"
-                                        accept="image/*"
+                                        accept="image/*,image/gif"
                                         className="detail-cover-input"
                                         onChange={handleCoverFile}
+                                    />
+                                    <HintButton
+                                        keyLabel="u"
+                                        title="Add save"
+                                        disabled={saveUploading}
+                                        onClick={() => saveInputRef.current?.click()}
+                                    >
+                                        {saveUploading ? 'Uploading…' : 'Add save'}
+                                    </HintButton>
+                                    <input
+                                        ref={saveInputRef}
+                                        type="file"
+                                        className="detail-cover-input"
+                                        onChange={handleSaveFile}
                                     />
                                 </div>
                             ) : null}
                             {coverError ? (
                                 <p className="detail-files-note detail-files-error" role="alert">
                                     {coverError}
+                                </p>
+                            ) : null}
+                            {saveError ? (
+                                <p className="detail-files-note detail-files-error" role="alert">
+                                    {saveError}
                                 </p>
                             ) : null}
                         </>

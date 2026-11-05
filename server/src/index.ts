@@ -28,6 +28,7 @@ import {
   replaceGame,
   resolveGameFile,
   saveGameCover,
+  saveGameFile,
   saveGameNotes,
   updateLibrary,
 } from './games.js';
@@ -260,11 +261,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       sendJson(response, 404, { error: 'File not found' });
       return;
     }
+    const download = url.searchParams.has('download');
     response.writeHead(200, {
       'content-type': resolved.contentType,
       'content-length': resolved.size,
       'access-control-allow-origin': config.CLIENT_ORIGIN,
       'cache-control': 'no-store',
+      ...(download
+        ? { 'content-disposition': `attachment; filename="${encodeURIComponent(resolved.fileName)}"` }
+        : {}),
     });
     const stream = createReadStream(resolved.absolutePath);
     stream.pipe(response);
@@ -358,6 +363,46 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const name = await saveGameCover(id, data, extension);
     if (!name) {
       sendJson(response, 500, { error: 'Could not save cover' });
+      return;
+    }
+    sendJson(response, 200, { data: { name } });
+    return;
+  }
+
+  const gameSaveMatch = url.pathname.match(/^\/api\/games\/([^/]+)\/save$/);
+  if (gameSaveMatch && request.method === 'POST') {
+    let id: string;
+    try {
+      id = decodeURIComponent(gameSaveMatch[1]);
+    } catch {
+      sendJson(response, 400, { error: 'Invalid game ID' });
+      return;
+    }
+    const game = await getGame(id);
+    if (!game) {
+      sendJson(response, 404, { error: 'Game not found' });
+      return;
+    }
+    if (!game.folder) {
+      sendJson(response, 400, { error: 'Game has no folder' });
+      return;
+    }
+    const filename = (url.searchParams.get('filename') ?? '').trim();
+    if (
+      !filename ||
+      filename === '.' ||
+      filename === '..' ||
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('\0')
+    ) {
+      sendJson(response, 400, { error: 'Invalid filename' });
+      return;
+    }
+    const data = await readRawBody(request, 256 * 1024 * 1024);
+    const name = await saveGameFile(id, filename, data);
+    if (!name) {
+      sendJson(response, 500, { error: 'Could not save file' });
       return;
     }
     sendJson(response, 200, { data: { name } });

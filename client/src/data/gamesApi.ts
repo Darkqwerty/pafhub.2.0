@@ -154,6 +154,24 @@ export async function uploadGameCover(id: string, file: File): Promise<string> {
   return (payload as { data: { name: string } }).data.name;
 }
 
+export async function uploadGameSave(id: string, file: File): Promise<string> {
+  const url = `/api/games/${encodeURIComponent(id)}/save?filename=${encodeURIComponent(file.name)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    body: await file.arrayBuffer(),
+  });
+  const serialized = await readJsonBody(response, url);
+  const payload = unwrapSuperJson<unknown>(serialized);
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    if (payload && typeof payload === 'object' && 'error' in payload) {
+      message = String((payload as { error: unknown }).error);
+    }
+    throw new Error(message);
+  }
+  return (payload as { data: { name: string } }).data.name;
+}
+
 export async function updateGame(id: string, changes: Partial<Omit<Game, 'id'>>): Promise<Game> {
   const result = await request<{ data: Game }>(`/api/games/${encodeURIComponent(id)}`, {
     method: 'PATCH',

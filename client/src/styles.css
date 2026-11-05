@@ -446,9 +446,11 @@ button { font: inherit; cursor: pointer; }
 }
 .detail-file { color: var(--fg-2); font: 11px var(--font); overflow-wrap: anywhere; }
 .detail-file.is-directory { color: var(--muted); }
+.detail-file.is-cover { color: var(--muted); }
 .detail-file-link { color: var(--accent); text-decoration: none; }
 .detail-file-link::before { content: '↗ '; color: var(--faint); }
 .detail-file-link:hover { color: var(--cyan); text-decoration: underline; }
+.detail-file-download::before { content: none; }
 .detail-file-note-link {
   padding: 0;
   border: 0;

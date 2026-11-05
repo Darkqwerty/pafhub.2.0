@@ -493,6 +493,7 @@ export type ResolvedGameFile = {
     absolutePath: string;
     contentType: string;
     size: number;
+    fileName: string;
 };
 
 const contentTypes: Record<string, string> = {
@@ -594,7 +595,12 @@ export async function resolveGameFile(
     try {
         const stat = await fsp.stat(absolutePath);
         if (!stat.isFile()) return undefined;
-        return { absolutePath, contentType: contentTypeFor(name), size: stat.size };
+        return {
+            absolutePath,
+            contentType: contentTypeFor(name),
+            size: stat.size,
+            fileName: path.basename(name)
+        };
     } catch {
         return undefined;
     }
@@ -649,6 +655,27 @@ export async function saveGameCover(
     const name = `cover${extension}`;
     await fsp.writeFile(path.join(target, name), data);
     return name;
+}
+
+/**
+ * Stores an uploaded game save under its original name inside the game's
+ * content folder. The filename must be a plain basename.
+ */
+export async function saveGameFile(
+    id: string,
+    filename: string,
+    data: Buffer
+): Promise<string | undefined> {
+    const game = await getGame(id);
+    const target = game ? resolveGameFolder(game) : undefined;
+    if (!target) return undefined;
+    const safeName = path.basename(filename);
+    if (!safeName || safeName === '.' || safeName === '..' || safeName !== filename) {
+        return undefined;
+    }
+    await fsp.mkdir(target, { recursive: true });
+    await fsp.writeFile(path.join(target, safeName), data);
+    return safeName;
 }
 
 async function loadStoredSourceRecords(
