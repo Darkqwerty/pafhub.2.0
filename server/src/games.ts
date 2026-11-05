@@ -63,7 +63,7 @@ export const createGameSchema = z.object({
 
 export const gamesListQuerySchema = z.object({
     search: z.string().trim().max(100).optional(),
-    service: z.enum(['steam', 'rawg', 'f95', 'epic']).optional(),
+    service: z.enum(['steam', 'rawg', 'f95', 'epic', 'local']).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     offset: z.coerce.number().int().min(0).default(0)
 });
@@ -238,7 +238,9 @@ export async function listGames(query: GamesListQuery) {
         .all()
         .filter(
             (game) =>
-                (!query.service || game.source?.service === query.service) &&
+                (query.service === 'local'
+                    ? game.source == null
+                    : !query.service || game.source?.service === query.service) &&
                 (!search ||
                     `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source?.service ?? 'local'} ${game.source?.id ?? ''} ${game.status}`
                         .toLocaleLowerCase()
@@ -258,6 +260,25 @@ export async function listGames(query: GamesListQuery) {
         limit: query.limit,
         offset: query.offset
     };
+}
+
+/** Number of games per service (including `local` for games without a source). */
+export async function getGameCounts(): Promise<Record<string, number>> {
+    const database = await getGamesDatabase();
+    const counts: Record<string, number> = { local: 0, steam: 0, rawg: 0, f95: 0, epic: 0 };
+    for (const game of database.all()) {
+        const key = game.source?.service ?? 'local';
+        counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+}
+
+/** Returns a randomly-selected game from the catalog (or undefined if empty). */
+export async function getRandomGame(): Promise<GameRecord | undefined> {
+    const database = await getGamesDatabase();
+    const games = database.all();
+    if (games.length === 0) return undefined;
+    return games[Math.floor(Math.random() * games.length)];
 }
 
 export type LibraryUpdateResult = {

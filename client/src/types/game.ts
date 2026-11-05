@@ -1,4 +1,6 @@
 export type GameService = 'steam' | 'rawg' | 'f95' | 'epic';
+export type GameServiceFilter = GameService | 'local';
+export type GameCounts = Record<GameServiceFilter, number>;
 export type GameStatus = 'Completed' | 'Uncompleted' | 'Played' | 'WantPlay';
 
 export type Game = {

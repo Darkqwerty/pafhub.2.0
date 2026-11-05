@@ -17,8 +17,10 @@ import {
   GameSourceError,
   gameFieldsSchema,
   getGame,
+  getGameCounts,
   getGameMedia,
   getGameNotes,
+  getRandomGame,
   gamesListQuerySchema,
   listGameFiles,
   listGames,
@@ -207,6 +209,21 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     }
 
     sendJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/games/counts') {
+    sendJson(response, 200, { data: await getGameCounts() });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/games/random') {
+    const game = await getRandomGame();
+    if (!game) {
+      sendJson(response, 404, { error: 'No games available' });
+      return;
+    }
+    sendJson(response, 200, { data: { game, media: await getGameMedia(game.id) } });
     return;
   }
 

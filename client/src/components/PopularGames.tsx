@@ -7,16 +7,16 @@ import {
     Tooltip
 } from '@mantine/core';
 import { MantineReactTable, type MRT_ColumnDef } from 'mantine-react-table';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { IconTerminal2 } from '@tabler/icons-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { IconSearch, IconTerminal2 } from '@tabler/icons-react';
 import { GameDetails } from './GameDetails';
 import { HintButton } from './HintButton';
 import { SettingsModal } from './SettingsModal';
-import { createGame, deleteGame, updateGame } from '../data/gamesApi';
+import { createGame, deleteGame, getGames, updateGame } from '../data/gamesApi';
 import type { CreateGameInput } from '../data/gamesApi';
 import { getSettings } from '../data/settingsApi';
 import type { Settings } from '../types/settings';
-import type { Game, GameService, GameStatus } from '../types/game';
+import type { Game, GameService, GameServiceFilter, GameStatus } from '../types/game';
 
 type PopularGamesProps = {
     games: Game[];
@@ -25,10 +25,12 @@ type PopularGamesProps = {
     onGameUpdated: (game: Game) => void;
     onGameCreated: (game: Game) => void;
     onGameDeleted: (id: string) => void;
-    library: GameService;
+    library: GameServiceFilter;
     updatingLibrary: boolean;
     onUpdateLibrary: () => void;
     libraryUpdateMessage: { kind: 'success' | 'error'; text: string } | null;
+    selectGameId: string | null;
+    onSelectGameHandled: () => void;
 };
 
 const statusOptions = ['Completed', 'Uncompleted', 'Played', 'WantPlay'];
@@ -40,7 +42,8 @@ const serviceOptions = [
     { value: 'f95', label: 'F95' }
 ];
 
-const libraryNames: Record<GameService, string> = {
+const libraryNames: Record<GameServiceFilter, string> = {
+    local: 'Local',
     steam: 'Steam',
     epic: 'Epic Games',
     rawg: 'RAWG',
@@ -82,7 +85,9 @@ export default function PopularGames({
     library,
     updatingLibrary,
     onUpdateLibrary,
-    libraryUpdateMessage
+    libraryUpdateMessage,
+    selectGameId,
+    onSelectGameHandled
 }: PopularGamesProps) {
     const [editingGame, setEditingGame] = useState<Game | null>(null);
     const [draft, setDraft] = useState<Game | null>(null);
@@ -97,6 +102,11 @@ export default function PopularGames({
     const [sortOpen, setSortOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [settings, setSettings] = useState<Settings | null>(null);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [searchEverywhere, setSearchEverywhere] = useState(false);
+    const [allGames, setAllGames] = useState<Game[] | null>(null);
+    const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -112,6 +122,22 @@ export default function PopularGames({
         };
     }, []);
 
+    // Load every service's games once when "search everywhere" is first enabled.
+    useEffect(() => {
+        if (!searchEverywhere || allGames !== null) return;
+        let active = true;
+        getGames()
+            .then((records) => {
+                if (active) setAllGames(records);
+            })
+            .catch(() => {
+                if (active) setAllGames([]);
+            });
+        return () => {
+            active = false;
+        };
+    }, [searchEverywhere, allGames]);
+
     const startEdit = useCallback((game: Game) => {
         setEditingGame(game);
         setDraft({ ...game, source: game.source ? { ...game.source } : null });
@@ -126,13 +152,21 @@ export default function PopularGames({
     // Sorting is driven by the s:Sort menu above the table, so the rendered
     // order and the default selection always agree.
     const displayGames = useMemo(() => {
-        const sorted = [...games].sort((a, b) => {
+        const base = searchEverywhere ? (allGames ?? games) : games;
+        const search = query.trim().toLowerCase();
+        const filtered = search
+            ? base.filter((game) =>
+                  `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source?.service ?? 'local'} ${game.source?.id ?? ''} ${game.status}`
+                      .toLowerCase()
+                      .includes(search))
+            : base;
+        const sorted = [...filtered].sort((a, b) => {
             const left = String(a[sorting.id]).toLowerCase();
             const right = String(b[sorting.id]).toLowerCase();
             return left.localeCompare(right, undefined, { sensitivity: 'base', numeric: true });
         });
         return sorting.desc ? sorted.reverse() : sorted;
-    }, [games, sorting]);
+    }, [games, allGames, searchEverywhere, query, sorting]);
 
     const chooseSort = (id: SortId) => {
         setSorting((current) => (current.id === id ? { id, desc: !current.desc } : { id, desc: false }));
@@ -148,12 +182,28 @@ export default function PopularGames({
         });
     }, [displayGames]);
 
+    // When a game is requested from outside (e.g. the random-game card), clear
+    // any active search so the game is visible, select it, then scroll the list
+    // so the selected row is in view.
+    useEffect(() => {
+        if (!selectGameId) return;
+        setQuery('');
+        setSearchEverywhere(false);
+        const index = displayGames.findIndex((game) => game.id === selectGameId);
+        if (index === -1) return;
+        setSelectedId(selectGameId);
+        tableContainerRef.current
+            ?.querySelector(`tr[data-index="${index}"]`)
+            ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        onSelectGameHandled();
+    }, [selectGameId, displayGames, onSelectGameHandled]);
+
     const selectedGame = useMemo(
         () => displayGames.find((game) => game.id === selectedId) ?? null,
         [displayGames, selectedId]
     );
 
-    const showVersionColumn = settings ? settings[showVersionKey[library]] : true;
+    const showVersionColumn = library === 'local' ? true : settings ? settings[showVersionKey[library]] : true;
 
     const columns = useMemo<MRT_ColumnDef<Game>[]>(() => {
         const result: MRT_ColumnDef<Game>[] = [{ accessorKey: 'title', header: 'GAME', size: 320 }];
@@ -291,9 +341,9 @@ export default function PopularGames({
                     <h2>{libraryNames[library]}</h2>
                 </div>
                 <div className="games-heading-actions">
-                    <span className="games-count">
-                        [{games.length}] {games.length === 1 ? 'game' : 'games'}
-                    </span>
+                    <HintButton keyLabel="/" title="Search games" onClick={() => setSearchOpen(true)}>
+                        Search
+                    </HintButton>
                     <div className="sort-control">
                         <HintButton keyLabel="s" title="Sort by column" onClick={() => setSortOpen((open) => !open)}>
                             Sort
@@ -322,20 +372,24 @@ export default function PopularGames({
                             </>
                         ) : null}
                     </div>
-                    <HintButton
-                        keyLabel="u"
-                        title={`Update ${library} library`}
-                        disabled={updatingLibrary}
-                        onClick={onUpdateLibrary}
-                    >
-                        {updatingLibrary ? 'Updating…' : 'Update library'}
-                    </HintButton>
+                    {library !== 'local' ? (
+                        <HintButton
+                            keyLabel="u"
+                            title={`Update ${library} library`}
+                            disabled={updatingLibrary}
+                            onClick={onUpdateLibrary}
+                        >
+                            {updatingLibrary ? 'Updating…' : 'Update library'}
+                        </HintButton>
+                    ) : null}
                     <HintButton keyLabel="a" title="Add game" onClick={openCreateForm}>
                         Add game
                     </HintButton>
-                    <HintButton keyLabel="s" title={`${libraryNames[library]} settings`} onClick={() => setSettingsOpen(true)}>
-                        Settings
-                    </HintButton>
+                    {library !== 'local' ? (
+                        <HintButton keyLabel="s" title={`${libraryNames[library]} settings`} onClick={() => setSettingsOpen(true)}>
+                            Settings
+                        </HintButton>
+                    ) : null}
                 </div>
             </div>
             {libraryUpdateMessage ? (
@@ -371,6 +425,7 @@ export default function PopularGames({
                         enableHiding={false}
                         enableSorting={false}
                         enableStickyHeader
+                        mantineTableContainerProps={{ ref: tableContainerRef }}
                         mantineTableProps={{ striped: false, highlightOnHover: true }}
                         mantineTableBodyRowProps={({ row }) => ({
                             onClick: () => setSelectedId(row.id),
@@ -575,12 +630,37 @@ export default function PopularGames({
                 ) : null}
             </Modal>
 
-            <SettingsModal
-                opened={settingsOpen}
-                onClose={() => setSettingsOpen(false)}
-                library={library}
-                onSaved={setSettings}
-            />
+            <Modal
+                opened={searchOpen}
+                onClose={() => setSearchOpen(false)}
+                title="Search games"
+                centered
+            >
+                <div className="game-editor">
+                    <TextInput
+                        label="Search"
+                        placeholder="grep games…"
+                        leftSection={<IconSearch size={16} />}
+                        value={query}
+                        onChange={(event) => setQuery(event.currentTarget.value)}
+                        autoFocus
+                    />
+                    <Checkbox
+                        label="Search everywhere"
+                        checked={searchEverywhere}
+                        onChange={(event) => setSearchEverywhere(event.currentTarget.checked)}
+                    />
+                </div>
+            </Modal>
+
+            {library !== 'local' ? (
+                <SettingsModal
+                    opened={settingsOpen}
+                    onClose={() => setSettingsOpen(false)}
+                    library={library}
+                    onSaved={setSettings}
+                />
+            ) : null}
         </section>
     );
 }

@@ -1,4 +1,4 @@
-import type { Game, GameService } from '../types/game';
+import type { Game, GameCounts, GameService, GameServiceFilter } from '../types/game';
 
 type GamesListResponse = {
   data: Game[];
@@ -62,7 +62,7 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export async function getGames(service?: GameService): Promise<Game[]> {
+export async function getGames(service?: GameServiceFilter): Promise<Game[]> {
   const games: Game[] = [];
   const limit = 200;
   const serviceQuery = service ? `&service=${encodeURIComponent(service)}` : '';
@@ -76,6 +76,11 @@ export async function getGames(service?: GameService): Promise<Game[]> {
     offset += limit;
   }
   return games;
+}
+
+export async function getGameCounts(): Promise<GameCounts> {
+  const result = await request<{ data: GameCounts }>('/api/games/counts');
+  return result.data;
 }
 
 export type GameFileEntry = {
@@ -99,6 +104,16 @@ export async function getGameMedia(id: string): Promise<GameMedia> {
   const result = await request<{ data: GameMedia }>(
     `/api/games/${encodeURIComponent(id)}/media`,
   );
+  return result.data;
+}
+
+export type RandomGame = {
+  game: Game;
+  media: GameMedia;
+};
+
+export async function getRandomGame(): Promise<RandomGame> {
+  const result = await request<{ data: RandomGame }>('/api/games/random');
   return result.data;
 }
 

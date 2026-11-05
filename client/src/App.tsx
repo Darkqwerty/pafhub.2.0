@@ -1,9 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { PageFooter } from './components/PageFooter';
 import { Sidebar } from './components/Sidebar';
-import { Topbar } from './components/Topbar';
-import { getGames, updateLibrary } from './data/gamesApi';
-import type { Game, GameService } from './types/game';
+import { getGameCounts, getGames, updateLibrary } from './data/gamesApi';
+import type { Game, GameCounts, GameServiceFilter } from './types/game';
 
 const PopularGames = lazy(() => import('./components/PopularGames'));
 
@@ -13,14 +12,27 @@ export type LibraryUpdateMessage = {
 };
 
 function App() {
-  const [query, setQuery] = useState('');
-  const [library, setLibrary] = useState<GameService>('steam');
+  const [library, setLibrary] = useState<GameServiceFilter>('steam');
   const [games, setGames] = useState<Game[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const [gamesError, setGamesError] = useState<string | null>(null);
   const [updatingLibrary, setUpdatingLibrary] = useState(false);
   const [libraryUpdateMessage, setLibraryUpdateMessage] = useState<LibraryUpdateMessage | null>(null);
+  const [counts, setCounts] = useState<GameCounts>({ local: 0, steam: 0, rawg: 0, f95: 0, epic: 0 });
+  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refreshCounts = useCallback(async () => {
+    try {
+      setCounts(await getGameCounts());
+    } catch {
+      // Counts are best-effort; keep the previous values on failure.
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCounts();
+  }, [refreshCounts]);
 
   useEffect(() => {
     let active = true;
@@ -56,21 +68,15 @@ function App() {
     };
   }, [library]);
 
-  const filteredGames = useMemo(
-    () => games.filter((game) =>
-      `${game.title} ${game.description} ${game.version} ${game.folder} ${game.source?.service ?? 'local'} ${game.source?.id ?? ''} ${game.status}`
-        .toLowerCase()
-        .includes(query.toLowerCase())),
-    [query, games],
-  );
-
   const handleUpdateLibrary = useCallback(async () => {
+    if (library === 'local') return;
     setUpdatingLibrary(true);
     setLibraryUpdateMessage(null);
     try {
       const result = await updateLibrary(library);
       const records = await getGames(library);
       setGames(records);
+      void refreshCounts();
       const added = result.added;
       setLibraryUpdateMessage(
         result.errors.length
@@ -101,29 +107,45 @@ function App() {
   };
 
   const handleGameCreated = (created: Game) => {
-    if (created.source?.service !== library) return;
+    const matches =
+      library === 'local' ? created.source == null : created.source?.service === library;
+    if (!matches) return;
     setGames((current) => [created, ...current]);
+    void refreshCounts();
   };
 
   const handleGameDeleted = (id: string) => {
     setGames((current) => current.filter((game) => game.id !== id));
+    void refreshCounts();
   };
 
-  const handleLibraryChange = (service: GameService) => {
+  const handleLibraryChange = (service: GameServiceFilter) => {
     if (service === library) return;
     setLibrary(service);
     setGamesError(null);
     setLibraryUpdateMessage(null);
   };
 
+  const handleOpenGame = (game: Game) => {
+    const service: GameServiceFilter = game.source?.service ?? 'local';
+    setLibrary(service);
+    setPendingSelection(game.id);
+    setGamesError(null);
+    setLibraryUpdateMessage(null);
+  };
+
   return (
     <div className="app-shell">
-      <Sidebar library={library} onLibraryChange={handleLibraryChange} />
+      <Sidebar
+        library={library}
+        counts={counts}
+        onLibraryChange={handleLibraryChange}
+        onOpenGame={handleOpenGame}
+      />
       <main className="main-content" id="top">
-        <Topbar query={query} onQueryChange={setQuery} />
         <Suspense fallback={<section className="catalog-section" aria-busy="true">Loading catalog…</section>}>
           <PopularGames
-            games={filteredGames}
+            games={games}
             loading={loadingGames}
             error={gamesError}
             onGameUpdated={handleGameUpdated}
@@ -133,6 +155,8 @@ function App() {
             updatingLibrary={updatingLibrary}
             onUpdateLibrary={handleUpdateLibrary}
             libraryUpdateMessage={libraryUpdateMessage}
+            selectGameId={pendingSelection}
+            onSelectGameHandled={() => setPendingSelection(null)}
           />
         </Suspense>
         <PageFooter />
